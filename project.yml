@@ -1,0 +1,42 @@
+name: ClipXS
+options:
+  bundleIdPrefix: com.clipxs
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    CODE_SIGN_ENTITLEMENTS: ClipXS/Resources/ClipXS.entitlements
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  ClipXS:
+    type: application
+    platform: macOS
+    sources:
+      - path: ClipXS
+        excludes:
+          - Resources/Info.plist
+    resources:
+      - ClipXS/Resources/Assets.xcassets
+      - ClipXS/Resources/en.lproj
+      - ClipXS/Resources/ja.lproj
+    info:
+      path: ClipXS/Resources/Info.plist
+      properties:
+        LSUIElement: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clipxs.ClipXS
+        PRODUCT_NAME: ClipXS
+        INFOPLIST_FILE: ClipXS/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        COMBINE_HIDPI_IMAGES: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        DEVELOPMENT_TEAM: HZ5XFG62KH
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: E60EE32102423D6209815F4BFE4BECB9ED561774
+    entitlements:
+      path: ClipXS/Resources/ClipXS.entitlements

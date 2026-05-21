@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode build & caches
+build/
+DerivedData/
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+
+# Archives & debug symbols (local artifacts)
+*.ipa
+*.dSYM.zip
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# IDE / editor (local only)
+*.swp
+*~
+.idea/
+.vscode/

@@ -1,0 +1,41 @@
+"history_title" = "Clipboard History";
+"history_shortcut" = "Option + Command + V";
+"history_empty" = "No clipboard history yet";
+"history_hint_navigate" = "Navigate";
+"history_hint_paste" = "Paste";
+"history_hint_close" = "Close";
+
+"menu_open_history" = "Open History (Option+Command+V)";
+"menu_clear_history" = "Clear History";
+"menu_accessibility" = "Open Accessibility Settings…";
+"menu_launch_at_login" = "Launch at Login";
+"menu_quit" = "Quit ClipXS";
+
+"launch_at_login_failed_title" = "Could Not Enable Launch at Login";
+"launch_at_login_failed_message" = "ClipXS could not register as a login item. Open Login Items settings and allow ClipXS, or move the app to Applications and try again.";
+"open_login_items_settings" = "Open Login Items Settings";
+
+"type_text" = "Text";
+"type_image" = "Image";
+"type_files" = "Files";
+
+"files_preview_multiple" = "%d files (%@…)";
+"image_preview" = "Image";
+
+"accessibility_title" = "Paste Permission Required";
+"accessibility_message" = "Enable this exact ClipXS app in System Settings → Privacy & Security → Accessibility. Automation (System Events) may also be required. Then restart ClipXS:\n\n%@";
+"paste_failed_message" = "Paste could not be sent. Confirm the app below is enabled in Accessibility, then restart ClipXS:\n\n%@";
+"open_settings" = "Open Settings";
+"restart_app" = "Restart ClipXS";
+"install_to_applications" = "Copy to Applications Folder";
+"install_failed_title" = "Could Not Install to Applications";
+"open_automation_settings" = "Open Automation Settings";
+"no_target_title" = "No Destination App";
+"no_target_message" = "Click in the app where you want to paste, then open clipboard history again.";
+"manual_paste_title" = "ClipXS";
+"manual_paste_body" = "Copied to clipboard. Press Command+V to paste.";
+"cancel" = "Cancel";
+"later" = "Later";
+
+"welcome_title" = "Welcome to ClipXS";
+"welcome_message" = "Press Option+Command+V to open clipboard history. Grant Accessibility permission so ClipXS can paste your selection automatically.";

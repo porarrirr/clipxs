@@ -1,0 +1,41 @@
+"history_title" = "クリップボード履歴";
+"history_shortcut" = "Option + Command + V";
+"history_empty" = "クリップボード履歴はまだありません";
+"history_hint_navigate" = "移動";
+"history_hint_paste" = "貼り付け";
+"history_hint_close" = "閉じる";
+
+"menu_open_history" = "履歴を開く (Option+Command+V)";
+"menu_clear_history" = "履歴を消去";
+"menu_accessibility" = "アクセシビリティ設定を開く…";
+"menu_launch_at_login" = "ログイン時に起動";
+"menu_quit" = "ClipXS を終了";
+
+"launch_at_login_failed_title" = "ログイン時起動を有効にできません";
+"launch_at_login_failed_message" = "ログイン項目への登録に失敗しました。ログイン項目の設定で ClipXS を許可するか、アプリをアプリケーションフォルダに移動してから再度お試しください。";
+"open_login_items_settings" = "ログイン項目を開く";
+
+"type_text" = "文章";
+"type_image" = "画像";
+"type_files" = "ファイル";
+
+"files_preview_multiple" = "%d 件のファイル (%@…)";
+"image_preview" = "画像";
+
+"accessibility_title" = "貼り付けの許可が必要です";
+"accessibility_message" = "次の ClipXS を システム設定 → プライバシーとセキュリティ → アクセシビリティ でオンにしてください。あわせて 自動化（システムイベント）の許可が必要な場合があります。設定後は ClipXS を再起動してください:\n\n%@";
+"paste_failed_message" = "貼り付けを送信できませんでした。次のアプリがアクセシビリティで許可されているか確認し、ClipXS を再起動してください:\n\n%@";
+"open_settings" = "設定を開く";
+"restart_app" = "ClipXS を再起動";
+"install_to_applications" = "アプリケーションフォルダにコピー";
+"install_failed_title" = "アプリケーションフォルダへのコピーに失敗";
+"open_automation_settings" = "自動化の設定を開く";
+"no_target_title" = "貼り付け先がありません";
+"no_target_message" = "貼り付けたいアプリをクリックしてから、もう一度履歴を開いてください。";
+"manual_paste_title" = "ClipXS";
+"manual_paste_body" = "クリップボードにコピーしました。Command+V で貼り付けてください。";
+"cancel" = "キャンセル";
+"later" = "あとで";
+
+"welcome_title" = "ClipXS へようこそ";
+"welcome_message" = "Option+Command+V でクリップボード履歴を開けます。選択項目の自動貼り付けには、アクセシビリティの許可が必要です。";
