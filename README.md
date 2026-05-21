@@ -5,7 +5,7 @@ Windows の **Win+V** 相当のクリップボード履歴アプリ for macOS。
 ## リポジトリ
 
 ```bash
-git clone <repository-url> clipxs
+git clone https://github.com/porarrirr/clipxs.git
 cd clipxs
 ```
 
