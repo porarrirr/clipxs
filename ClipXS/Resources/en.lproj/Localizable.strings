@@ -27,9 +27,6 @@
 "paste_failed_message" = "Paste could not be sent. Confirm the app below is enabled in Accessibility, then restart ClipXS:\n\n%@";
 "open_settings" = "Open Settings";
 "restart_app" = "Restart ClipXS";
-"install_to_applications" = "Copy to Applications Folder";
-"install_failed_title" = "Could Not Install to Applications";
-"open_automation_settings" = "Open Automation Settings";
 "no_target_title" = "No Destination App";
 "no_target_message" = "Click in the app where you want to paste, then open clipboard history again.";
 "manual_paste_title" = "ClipXS";

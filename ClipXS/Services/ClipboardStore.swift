@@ -38,6 +38,9 @@ final class ClipboardStore {
     private func openDatabase() {
         let path = databaseURL.path
         if sqlite3_open(path, &db) != SQLITE_OK {
+            let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "out of memory"
+            NSLog("ClipXS: failed to open database at \(path): \(message)")
+            sqlite3_close(db)
             db = nil
         }
     }
@@ -58,19 +61,32 @@ final class ClipboardStore {
     }
 
     private func execute(_ sql: String) {
-        var error: UnsafeMutablePointer<CChar>?
-        sqlite3_exec(db, sql, nil, nil, &error)
-        if let error {
-            sqlite3_free(error)
+        var errorPointer: UnsafeMutablePointer<CChar>?
+        if sqlite3_exec(db, sql, nil, nil, &errorPointer) != SQLITE_OK {
+            let message = errorPointer.map { String(cString: $0) } ?? "unknown error"
+            NSLog("ClipXS: SQL failed: \(message)")
+        }
+        if let errorPointer {
+            sqlite3_free(errorPointer)
         }
     }
 
-    func insert(_ entry: ClipboardEntry, contentHash: String) {
+    func insert(_ item: CapturedClipboardItem) {
         queue.async { [weak self] in
             guard let self, let db = self.db else { return }
+            let entry = item.entry
 
-            if self.hasHash(contentHash) {
-                self.deleteByHash(contentHash)
+            if let imageData = item.imageData {
+                do {
+                    try imageData.write(to: URL(fileURLWithPath: entry.payload))
+                } catch {
+                    NSLog("ClipXS: failed to write image file: \(error.localizedDescription)")
+                    return
+                }
+            }
+
+            if self.hasHash(item.contentHash) {
+                self.deleteByHash(item.contentHash)
             }
 
             let sql = """
@@ -86,9 +102,11 @@ final class ClipboardStore {
             sqlite3_bind_text(stmt, 2, entry.type.rawValue, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(stmt, 3, entry.preview, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(stmt, 4, entry.payload, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 5, contentHash, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 5, item.contentHash, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(stmt, 6, entry.createdAt.timeIntervalSince1970)
-            sqlite3_step(stmt)
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                NSLog("ClipXS: insert failed: \(String(cString: sqlite3_errmsg(db)))")
+            }
 
             self.trimToMax()
         }
@@ -115,7 +133,9 @@ final class ClipboardStore {
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_text(stmt, 1, hash, -1, SQLITE_TRANSIENT)
-        sqlite3_step(stmt)
+        if sqlite3_step(stmt) != SQLITE_DONE {
+            NSLog("ClipXS: delete by hash failed: \(String(cString: sqlite3_errmsg(db)))")
+        }
     }
 
     private func fetchEntry(hash: String) -> ClipboardEntry? {
@@ -166,7 +186,9 @@ final class ClipboardStore {
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
             defer { sqlite3_finalize(stmt) }
             sqlite3_bind_text(stmt, 1, entry.id.uuidString, -1, SQLITE_TRANSIENT)
-            sqlite3_step(stmt)
+            if sqlite3_step(stmt) != SQLITE_DONE {
+                NSLog("ClipXS: delete entry failed: \(String(cString: sqlite3_errmsg(db)))")
+            }
         }
     }
 

@@ -94,6 +94,10 @@ struct HistoryRowView: View {
     let entry: ClipboardEntry
     let isSelected: Bool
 
+    // Image payloads live at UUID-named paths that are never reused, so cached
+    // thumbnails can never go stale.
+    private static let thumbnailCache = NSCache<NSString, NSImage>()
+
     var body: some View {
         HStack(spacing: 10) {
             typeIcon
@@ -106,7 +110,7 @@ struct HistoryRowView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            if entry.type == .image, let image = NSImage(contentsOfFile: entry.payload) {
+            if entry.type == .image, let image = thumbnail(forPath: entry.payload) {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -120,6 +124,15 @@ struct HistoryRowView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         )
+    }
+
+    private func thumbnail(forPath path: String) -> NSImage? {
+        if let cached = Self.thumbnailCache.object(forKey: path as NSString) {
+            return cached
+        }
+        guard let image = NSImage(contentsOfFile: path) else { return nil }
+        Self.thumbnailCache.setObject(image, forKey: path as NSString)
+        return image
     }
 
     private var typeIcon: some View {

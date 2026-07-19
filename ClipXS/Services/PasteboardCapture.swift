@@ -5,6 +5,15 @@ import Foundation
 struct CapturedClipboardItem {
     let entry: ClipboardEntry
     let contentHash: String
+    /// PNG data for image entries. Written to `entry.payload` by ClipboardStore
+    /// on its serial queue, so file creation cannot race the orphan cleanup.
+    let imageData: Data?
+
+    init(entry: ClipboardEntry, contentHash: String, imageData: Data? = nil) {
+        self.entry = entry
+        self.contentHash = contentHash
+        self.imageData = imageData
+    }
 }
 
 enum PasteboardCapture {
@@ -73,26 +82,18 @@ enum PasteboardCapture {
 
         let fileName = UUID().uuidString + ".png"
         let fileURL = ClipboardStore.shared.imagesDirectory.appendingPathComponent(fileName)
-        do {
-            try png.write(to: fileURL)
-        } catch {
-            return nil
-        }
-
-        let payload = fileURL.path
-        let hash = sha256(payload + String(png.count))
+        let hash = sha256(png)
         let preview = NSLocalizedString("image_preview", comment: "")
-        let entry = ClipboardEntry(type: .image, preview: preview, payload: payload)
-        return CapturedClipboardItem(entry: entry, contentHash: hash)
+        let entry = ClipboardEntry(type: .image, preview: preview, payload: fileURL.path)
+        return CapturedClipboardItem(entry: entry, contentHash: hash, imageData: png)
     }
 
     private static func makeTextItem(from pasteboard: NSPasteboard) -> CapturedClipboardItem? {
-        guard let text = pasteboard.string(forType: .string)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty
-        else { return nil }
+        guard let text = pasteboard.string(forType: .string) else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
 
-        let preview = String(text.prefix(previewLimit))
+        let preview = String(trimmed.prefix(previewLimit))
             .replacingOccurrences(of: "\n", with: " ")
         let hash = sha256(text)
         let entry = ClipboardEntry(type: .text, preview: preview, payload: text)
@@ -100,7 +101,10 @@ enum PasteboardCapture {
     }
 
     private static func sha256(_ value: String) -> String {
-        let digest = SHA256.hash(data: Data(value.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
+        sha256(Data(value.utf8))
+    }
+
+    private static func sha256(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }

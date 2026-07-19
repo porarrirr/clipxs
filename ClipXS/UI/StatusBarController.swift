@@ -77,7 +77,9 @@ final class StatusBarController {
         }
 
         if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
-            statusItem.popUpMenu(menu)
+            statusItem.menu = menu
+            statusItem.button?.performClick(nil)
+            statusItem.menu = nil
         } else {
             HistoryPanelController.shared.toggle()
         }

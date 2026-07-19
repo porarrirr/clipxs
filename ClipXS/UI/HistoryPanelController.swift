@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+/// Borderless panels refuse key status by default; the panel must become key so
+/// keyboard navigation reaches ClipXS instead of leaking into the app behind it.
+private final class HistoryPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
 final class HistoryPanelController: NSWindowController {
     static let shared = HistoryPanelController()
     private static let panelMargin: CGFloat = 16
@@ -9,12 +15,11 @@ final class HistoryPanelController: NSWindowController {
     private var frontmostAppBeforePanel: NSRunningApplication?
     private var frontmostBundleIdBeforePanel: String?
     private var localKeyMonitor: Any?
-    private var globalKeyMonitor: Any?
     private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
 
     private init() {
-        let panel = NSPanel(
+        let panel = HistoryPanel(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
             styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
             backing: .buffered,
@@ -67,7 +72,7 @@ final class HistoryPanelController: NSWindowController {
         rememberFrontmostApp()
         viewModel.reload()
         positionNearCursor(window: window)
-        window.orderFrontRegardless()
+        window.makeKeyAndOrderFront(nil)
         installEventMonitors()
     }
 
@@ -185,9 +190,6 @@ final class HistoryPanelController: NSWindowController {
             if self?.handleKey(event) == true { return nil }
             return event
         }
-        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            _ = self?.handleKey(event)
-        }
 
         // Avoid treating the same click that opened the panel as an outside click.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
@@ -208,10 +210,6 @@ final class HistoryPanelController: NSWindowController {
         if let localKeyMonitor {
             NSEvent.removeMonitor(localKeyMonitor)
             self.localKeyMonitor = nil
-        }
-        if let globalKeyMonitor {
-            NSEvent.removeMonitor(globalKeyMonitor)
-            self.globalKeyMonitor = nil
         }
         if let localClickMonitor {
             NSEvent.removeMonitor(localClickMonitor)

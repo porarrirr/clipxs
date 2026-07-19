@@ -27,9 +27,6 @@
 "paste_failed_message" = "貼り付けを送信できませんでした。次のアプリがアクセシビリティで許可されているか確認し、ClipXS を再起動してください:\n\n%@";
 "open_settings" = "設定を開く";
 "restart_app" = "ClipXS を再起動";
-"install_to_applications" = "アプリケーションフォルダにコピー";
-"install_failed_title" = "アプリケーションフォルダへのコピーに失敗";
-"open_automation_settings" = "自動化の設定を開く";
 "no_target_title" = "貼り付け先がありません";
 "no_target_message" = "貼り付けたいアプリをクリックしてから、もう一度履歴を開いてください。";
 "manual_paste_title" = "ClipXS";

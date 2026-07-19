@@ -43,7 +43,7 @@ final class ClipboardMonitor {
         }
 
         guard let captured = PasteboardCapture.capture(from: pasteboard) else { return }
-        ClipboardStore.shared.insert(captured.entry, contentHash: captured.contentHash)
+        ClipboardStore.shared.insert(captured)
         onEntriesChanged?()
     }
 }

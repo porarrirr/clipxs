@@ -21,7 +21,6 @@ enum PasteService {
         targetApp: NSRunningApplication? = nil,
         completion: ((Bool) -> Void)? = nil
     ) {
-        ClipboardMonitor.shared.suppressNextCapture()
         let target = resolveTargetApp(preferred: targetApp)
 
         guard let target, !target.isTerminated else {
@@ -55,6 +54,7 @@ enum PasteService {
         completion: ((Bool) -> Void)?
     ) {
         let trusted = isAccessibilityTrusted(prompt: false)
+        ClipboardMonitor.shared.suppressNextCapture()
         guard PasteboardRestore.restore(entry) else {
             showPasteFailedAlert()
             completion?(false)
@@ -64,69 +64,46 @@ enum PasteService {
         target.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            guard ensureFrontmost(target) else {
-                showManualPasteNotification()
-                completion?(true)
-                return
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                var succeeded = false
-
-                if !succeeded, trusted {
-                    succeeded = postCommandVGlobally()
-                }
-
-                if !succeeded, trusted {
-                    succeeded = postCommandV(to: target.processIdentifier)
-                }
-
-                if !succeeded, trusted, entry.type == .text {
-                    succeeded = insertTextViaAccessibility(entry.payload)
-                }
-
-                if !succeeded, trusted, entry.type == .text {
-                    succeeded = typeTextViaKeyboardEvents(entry.payload)
-                }
-
-                if succeeded {
-                    completion?(true)
-                } else {
+            waitUntilFrontmost(target, attempts: 8) { isFrontmost in
+                guard isFrontmost else {
                     showManualPasteNotification()
-                    showPasteFailedAlert()
-                    completion?(false)
+                    completion?(true)
+                    return
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                    if trusted, postCommandV() {
+                        completion?(true)
+                    } else {
+                        showManualPasteNotification()
+                        showPasteFailedAlert()
+                        completion?(false)
+                    }
                 }
             }
         }
     }
 
-    @discardableResult
-    private static func ensureFrontmost(_ target: NSRunningApplication, attempts: Int = 8) -> Bool {
-        for _ in 0..<attempts {
-            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == target.bundleIdentifier {
-                return true
-            }
-            target.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
-            Thread.sleep(forTimeInterval: 0.04)
+    private static func waitUntilFrontmost(
+        _ target: NSRunningApplication,
+        attempts: Int,
+        completion: @escaping (Bool) -> Void
+    ) {
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == target.bundleIdentifier {
+            completion(true)
+            return
         }
-        return NSWorkspace.shared.frontmostApplication?.bundleIdentifier == target.bundleIdentifier
+        guard attempts > 0 else {
+            completion(false)
+            return
+        }
+        target.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
+            waitUntilFrontmost(target, attempts: attempts - 1, completion: completion)
+        }
     }
 
-    private static func postCommandV(to pid: pid_t) -> Bool {
-        guard pid != ProcessInfo.processInfo.processIdentifier else { return false }
-        let source = CGEventSource(stateID: .combinedSessionState)
-        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
-        else { return false }
-
-        keyDown.flags = .maskCommand
-        keyUp.flags = .maskCommand
-        keyDown.postToPid(pid)
-        keyUp.postToPid(pid)
-        return true
-    }
-
-    private static func postCommandVGlobally() -> Bool {
+    private static func postCommandV() -> Bool {
         let source = CGEventSource(stateID: .hidSystemState)
             ?? CGEventSource(stateID: .combinedSessionState)
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true),
@@ -138,62 +115,6 @@ enum PasteService {
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
         return true
-    }
-
-    private static func typeTextViaKeyboardEvents(_ text: String) -> Bool {
-        guard !text.isEmpty else { return true }
-        let source = CGEventSource(stateID: .hidSystemState)
-            ?? CGEventSource(stateID: .combinedSessionState)
-
-        for var codeUnit in text.utf16 {
-            guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
-                  let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
-            else { return false }
-
-            keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &codeUnit)
-            keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &codeUnit)
-            keyDown.post(tap: .cghidEventTap)
-            keyUp.post(tap: .cghidEventTap)
-        }
-
-        return true
-    }
-
-    private static func insertTextViaAccessibility(_ text: String) -> Bool {
-        guard !text.isEmpty else { return true }
-
-        let systemWide = AXUIElementCreateSystemWide()
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            systemWide,
-            kAXFocusedUIElementAttribute as CFString,
-            &focused
-        ) == .success,
-        let focused
-        else { return false }
-
-        let element = focused as! AXUIElement
-        var selectedTextSettable = DarwinBoolean(false)
-        if AXUIElementIsAttributeSettable(
-            element,
-            kAXSelectedTextAttribute as CFString,
-            &selectedTextSettable
-        ) == .success,
-        selectedTextSettable.boolValue,
-        AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFTypeRef) == .success {
-            return true
-        }
-
-        var valueSettable = DarwinBoolean(false)
-        guard AXUIElementIsAttributeSettable(
-            element,
-            kAXValueAttribute as CFString,
-            &valueSettable
-        ) == .success,
-        valueSettable.boolValue
-        else { return false }
-
-        return AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFTypeRef) == .success
     }
 
     private static func showNoTargetAlert() {
@@ -255,27 +176,6 @@ enum PasteService {
 
     private static func requestNotificationPermissionIfNeeded() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
-    }
-
-    static func installToApplicationsAndRelaunch() {
-        let source = Bundle.main.bundleURL
-        let destination = URL(fileURLWithPath: "/Applications/ClipXS.app")
-        do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: source, to: destination)
-            NSWorkspace.shared.openApplication(at: destination, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
-                DispatchQueue.main.async {
-                    NSApp.terminate(nil)
-                }
-            }
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = NSLocalizedString("install_failed_title", comment: "")
-            alert.informativeText = error.localizedDescription
-            alert.runModal()
-        }
     }
 
     private static func relaunch() {
