@@ -8,16 +8,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LaunchAtLoginManager.syncWithSystem()
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
+        // Touch the store now so schema migration runs at a predictable point
+        // (startup), not lazily on the first capture or panel open.
+        _ = ClipboardStore.shared
+
         statusBarController = StatusBarController()
 
-        ClipboardMonitor.shared.onEntriesChanged = {
-            NotificationCenter.default.post(name: .clipxsHistoryDidChange, object: nil)
-        }
         ClipboardMonitor.shared.start()
 
-        HotkeyManager.shared.register {
-            HistoryPanelController.shared.toggle()
-        }
+        HotkeyManager.shared.register(
+            onHotkey: {
+                HistoryPanelController.shared.toggle()
+            },
+            onQueuePaste: {
+                Task { @MainActor in
+                    PasteQueue.shared.pasteNext()
+                }
+            }
+        )
 
         if !PasteService.isAccessibilityTrusted(prompt: false) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in

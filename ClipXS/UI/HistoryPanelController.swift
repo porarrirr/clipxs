@@ -20,7 +20,7 @@ final class HistoryPanelController: NSWindowController {
 
     private init() {
         let panel = HistoryPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
+            contentRect: NSRect(origin: .zero, size: HistoryView.panelSize),
             styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
             backing: .buffered,
             defer: false
@@ -39,10 +39,10 @@ final class HistoryPanelController: NSWindowController {
         let host = NSHostingView(rootView: HistoryView(viewModel: viewModel))
         panel.contentView = host
 
-        viewModel.onPaste = { [weak self] entry in
+        viewModel.onPaste = { [weak self] entry, plainTextOnly in
             let targetApp = self?.resolvedTargetApp()
             self?.hide()
-            PasteService.paste(entry: entry, targetApp: targetApp)
+            PasteService.paste(entry: entry, targetApp: targetApp, plainTextOnly: plainTextOnly)
             self?.clearTargetApp()
         }
         viewModel.onDismiss = { [weak self] in
@@ -74,6 +74,31 @@ final class HistoryPanelController: NSWindowController {
         positionNearCursor(window: window)
         window.makeKeyAndOrderFront(nil)
         installEventMonitors()
+        focusSearchField()
+    }
+
+    /// The search box is an NSTextField hosted by SwiftUI; find it in the
+    /// AppKit hierarchy once layout has happened and give it keyboard focus.
+    private func focusSearchField() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window, self.isVisible,
+                  let contentView = window.contentView,
+                  let field = Self.findTextField(in: contentView)
+            else { return }
+            window.makeFirstResponder(field)
+        }
+    }
+
+    private static func findTextField(in view: NSView) -> NSTextField? {
+        for subview in view.subviews {
+            if let field = subview as? NSTextField, field.isEditable {
+                return field
+            }
+            if let nested = findTextField(in: subview) {
+                return nested
+            }
+        }
+        return nil
     }
 
     func hide() {
@@ -143,22 +168,25 @@ final class HistoryPanelController: NSWindowController {
             kAXFocusedUIElementAttribute as CFString,
             &focused
         ) == .success,
-        let focused
+        let focused,
+        CFGetTypeID(focused) == AXUIElementGetTypeID()
         else { return nil }
 
-        let element = focused as! AXUIElement
+        let element = unsafeDowncast(focused, to: AXUIElement.self)
         var positionValue: CFTypeRef?
         var sizeValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &positionValue) == .success,
               AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeValue) == .success,
               let positionValue,
-              let sizeValue
+              let sizeValue,
+              CFGetTypeID(positionValue) == AXValueGetTypeID(),
+              CFGetTypeID(sizeValue) == AXValueGetTypeID()
         else { return nil }
 
         var position = CGPoint.zero
         var size = CGSize.zero
-        guard AXValueGetValue(positionValue as! AXValue, .cgPoint, &position),
-              AXValueGetValue(sizeValue as! AXValue, .cgSize, &size),
+        guard AXValueGetValue(unsafeDowncast(positionValue, to: AXValue.self), .cgPoint, &position),
+              AXValueGetValue(unsafeDowncast(sizeValue, to: AXValue.self), .cgSize, &size),
               size.width > 0,
               size.height > 0
         else { return nil }
@@ -253,9 +281,29 @@ final class HistoryPanelController: NSWindowController {
         }
     }
 
+    /// Single keyboard router for the panel. Consumes only navigation keys and
+    /// ⌘-chords; everything else (letters, digits, Delete, IME input) falls
+    /// through to the search field.
+    private static let digitKeyCodes: [UInt16: Int] = [
+        18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9
+    ]
+
     @discardableResult
     private func handleKey(_ event: NSEvent) -> Bool {
         guard isVisible else { return false }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // While editing an entry, keys must reach the text editor; only the
+        // editing chords are intercepted (⌘↩ save handled by SwiftUI's
+        // keyboardShortcut on the save button, Esc cancels here).
+        if viewModel.isEditing {
+            if event.keyCode == 53 {
+                viewModel.cancelEditing()
+                return true
+            }
+            return false
+        }
+
         switch event.keyCode {
         case 126: // up
             viewModel.selectPrevious()
@@ -263,13 +311,35 @@ final class HistoryPanelController: NSWindowController {
         case 125: // down
             viewModel.selectNext()
             return true
-        case 36: // return
-            viewModel.pasteSelected()
+        case 36 where flags.contains(.command): // cmd+return — add to paste queue
+            viewModel.enqueueSelection()
             return true
-        case 53: // escape
-            hide()
+        case 36: // return — plain pastes; shift+return pastes as plain text
+            viewModel.pasteSelected(plainTextOnly: flags.contains(.shift))
+            return true
+        case 53: // escape — clears search → multi-selection → closes
+            if !viewModel.searchText.isEmpty {
+                viewModel.searchText = ""
+            } else if !viewModel.multiSelectedIds.isEmpty {
+                viewModel.clearMultiSelection()
+            } else {
+                hide()
+            }
+            return true
+        case 51 where flags.contains(.command): // cmd+delete
+            viewModel.deleteSelected()
+            return true
+        case 35 where flags.contains(.command): // cmd+P — toggle pin
+            viewModel.togglePinSelected()
+            return true
+        case 14 where flags.contains(.command): // cmd+E — edit selected text entry
+            viewModel.beginEditingSelected()
             return true
         default:
+            if flags.contains(.command), let digit = Self.digitKeyCodes[event.keyCode] {
+                viewModel.paste(at: digit - 1)
+                return true
+            }
             return false
         }
     }

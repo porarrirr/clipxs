@@ -19,6 +19,7 @@ enum PasteService {
     static func paste(
         entry: ClipboardEntry,
         targetApp: NSRunningApplication? = nil,
+        plainTextOnly: Bool = false,
         completion: ((Bool) -> Void)? = nil
     ) {
         let target = resolveTargetApp(preferred: targetApp)
@@ -29,7 +30,7 @@ enum PasteService {
             return
         }
 
-        performPaste(entry: entry, into: target, completion: completion)
+        performPaste(entry: entry, into: target, plainTextOnly: plainTextOnly, completion: completion)
     }
 
     private static func resolveTargetApp(preferred: NSRunningApplication?) -> NSRunningApplication? {
@@ -51,11 +52,16 @@ enum PasteService {
     private static func performPaste(
         entry: ClipboardEntry,
         into target: NSRunningApplication,
+        plainTextOnly: Bool,
         completion: ((Bool) -> Void)?
     ) {
         let trusted = isAccessibilityTrusted(prompt: false)
+        // Per-app rule: apps on the plain-paste list always receive plain text
+        // (terminals, editors where rich formatting is unwanted).
+        let forcePlain = entry.type == .text
+            && SettingsAccess.plainPasteBundleIds.contains(target.bundleIdentifier ?? "")
         ClipboardMonitor.shared.suppressNextCapture()
-        guard PasteboardRestore.restore(entry) else {
+        guard PasteboardRestore.restore(entry, plainTextOnly: plainTextOnly || forcePlain) else {
             showPasteFailedAlert()
             completion?(false)
             return
@@ -63,22 +69,22 @@ enum PasteService {
 
         target.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            waitUntilFrontmost(target, attempts: 8) { isFrontmost in
-                guard isFrontmost else {
-                    showManualPasteNotification()
-                    completion?(true)
-                    return
-                }
+        // The frontmost poll already absorbs activation latency, so no fixed
+        // lead-in delay is needed; keep a short settle before sending Cmd+V.
+        waitUntilFrontmost(target, attempts: 15) { isFrontmost in
+            guard isFrontmost else {
+                showManualPasteNotification()
+                completion?(true)
+                return
+            }
 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                    if trusted, postCommandV() {
-                        completion?(true)
-                    } else {
-                        showManualPasteNotification()
-                        showPasteFailedAlert()
-                        completion?(false)
-                    }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                if trusted, postCommandV() {
+                    completion?(true)
+                } else {
+                    showManualPasteNotification()
+                    showPasteFailedAlert()
+                    completion?(false)
                 }
             }
         }

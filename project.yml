@@ -40,3 +40,29 @@ targets:
         CODE_SIGN_IDENTITY: E60EE32102423D6209815F4BFE4BECB9ED561774
     entitlements:
       path: ClipXS/Resources/ClipXS.entitlements
+    scheme:
+      testTargets:
+        - ClipXSTests
+  # Standalone logic tests: the store/model sources are compiled directly into
+  # the bundle so the tests do not depend on hosting (and signing) the app.
+  ClipXSTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ClipXSTests
+      - path: ClipXS/Models
+      - path: ClipXS/Services/ClipboardStore.swift
+      - path: ClipXS/Services/AppSettings.swift
+      - path: ClipXS/Services/PasteboardCapture.swift
+      - path: ClipXS/Services/PasteboardRestore.swift
+      - path: ClipXS/Services/ContentHash.swift
+      - path: ClipXS/Services/TextTransform.swift
+      - path: ClipXS/UI/ThumbnailLoader.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clipxs.ClipXSTests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_ENTITLEMENTS: ""
+        DEVELOPMENT_TEAM: ""

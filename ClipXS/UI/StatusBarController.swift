@@ -26,12 +26,23 @@ final class StatusBarController {
     }
 
     private func configureMenu() {
+        let hotkeyDisplay = HotkeyFormatter.displayString(
+            keyCode: SettingsAccess.hotkeyKeyCode,
+            carbonModifiers: SettingsAccess.hotkeyModifiers
+        )
         let openItem = NSMenuItem(
-            title: NSLocalizedString("menu_open_history", comment: ""),
+            title: String(format: NSLocalizedString("menu_open_history", comment: ""), hotkeyDisplay),
             action: #selector(openHistory),
             keyEquivalent: ""
         )
         openItem.target = self
+
+        let settingsItem = NSMenuItem(
+            title: NSLocalizedString("menu_settings", comment: ""),
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
 
         let clearItem = NSMenuItem(
             title: NSLocalizedString("menu_clear_history", comment: ""),
@@ -60,6 +71,7 @@ final class StatusBarController {
         quitItem.target = self
 
         menu.addItem(openItem)
+        menu.addItem(settingsItem)
         menu.addItem(.separator())
         menu.addItem(clearItem)
         menu.addItem(accessibilityItem)
@@ -89,10 +101,12 @@ final class StatusBarController {
         HistoryPanelController.shared.show()
     }
 
+    @objc private func openSettings() {
+        SettingsWindowController.shared.show()
+    }
+
     @objc private func clearHistory() {
-        ClipboardStore.shared.clearAll {
-            NotificationCenter.default.post(name: .clipxsHistoryDidChange, object: nil)
-        }
+        ClipboardStore.shared.clearAll()
     }
 
     @objc private func openAccessibilitySettings() {
@@ -130,8 +144,4 @@ final class StatusBarController {
     @objc private func quit() {
         NSApp.terminate(nil)
     }
-}
-
-extension Notification.Name {
-    static let clipxsHistoryDidChange = Notification.Name("clipxsHistoryDidChange")
 }

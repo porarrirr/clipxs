@@ -1,21 +1,100 @@
 "history_title" = "クリップボード履歴";
-"history_shortcut" = "Option + Command + V";
 "history_empty" = "クリップボード履歴はまだありません";
+"history_no_results" = "該当する項目がありません";
 "history_hint_navigate" = "移動";
 "history_hint_paste" = "貼り付け";
 "history_hint_close" = "閉じる";
+"hint_paste_plain" = "⇧↩ プレーン";
+"hint_quick_paste" = "⌘1–9 即貼り付け";
+"hint_delete" = "⌘⌫ 削除";
 
-"menu_open_history" = "履歴を開く (Option+Command+V)";
+"search_placeholder" = "履歴を検索…";
+"filter_all" = "すべて";
+"filter_text" = "文章";
+"filter_link" = "リンク";
+"filter_image" = "画像";
+"filter_file" = "ファイル";
+
+"context_paste" = "貼り付け";
+"context_paste_plain" = "プレーンテキストとして貼り付け";
+"context_copy" = "コピー";
+"context_pin" = "ピン留め";
+"context_unpin" = "ピン留めを解除";
+"context_delete" = "削除";
+"context_transform" = "変換して貼り付け";
+"context_add_to_queue" = "ペーストキューに追加";
+"context_merge_paste" = "%d 件を結合して貼り付け";
+"context_enqueue_selection" = "%d 件をペーストキューに追加";
+"context_edit" = "編集…";
+"context_paste_ocr" = "認識したテキストを貼り付け";
+"context_copy_ocr" = "認識したテキストをコピー";
+
+"transform_uppercase" = "大文字";
+"transform_lowercase" = "小文字";
+"transform_remove_linebreaks" = "改行を削除";
+"transform_collapse_whitespace" = "空白を整理";
+"transform_url_decode" = "URL デコード";
+
+"queue_bar_count" = "ペーストキュー: %d 件";
+"queue_bar_hint" = "%@ で次の項目を貼り付け";
+"queue_clear" = "クリア";
+
+"multi_select_count" = "%d 件選択中";
+"multi_merge_paste" = "結合して貼り付け";
+"multi_clear" = "選択解除";
+"hint_multi_select" = "⌘クリック 複数選択";
+
+"edit_save" = "保存";
+"edit_hint" = "⌘↩ 保存 / Esc キャンセル";
+
+"preview_placeholder" = "項目を選択するとプレビューを表示します";
+"preview_pinned" = "ピン留め";
+"preview_char_count" = "%d 文字";
+"preview_rich_text" = "リッチテキスト";
+"preview_ocr_label" = "認識テキスト";
+"quick_look_loading" = "プレビューを読み込み中";
+"quick_look_failed" = "プレビューを表示できません";
+
+"menu_open_history" = "履歴を開く (%@)";
+"menu_settings" = "設定…";
 "menu_clear_history" = "履歴を消去";
 "menu_accessibility" = "アクセシビリティ設定を開く…";
 "menu_launch_at_login" = "ログイン時に起動";
 "menu_quit" = "ClipXS を終了";
+
+"settings_title" = "ClipXS 設定";
+"settings_section_hotkey" = "ホットキー";
+"settings_hotkey_label" = "履歴パネルを開く";
+"settings_hotkey_recording" = "新しいショートカットを入力…";
+"settings_hotkey_recording_hint" = "⌘・⌥・⌃ を含むキーを押してください（Esc でキャンセル）";
+"settings_hotkey_conflict_title" = "ショートカットを登録できません";
+"settings_hotkey_conflict_message" = "このショートカットはシステムまたは他のアプリが使用している可能性があります。以前のショートカットに戻しました。";
+"settings_section_general" = "一般";
+"settings_max_entries_label" = "履歴の最大件数";
+"settings_retention_label" = "履歴の自動削除";
+"retention_unlimited" = "しない";
+"retention_day" = "24時間後";
+"retention_week" = "1週間後";
+"retention_month" = "1ヶ月後";
+"settings_ocr_label" = "画像内のテキストを認識（OCR）";
+"settings_section_excluded_apps" = "除外アプリ";
+"settings_excluded_apps_description" = "これらのアプリでのコピーは履歴に記録されません。";
+"settings_excluded_apps_empty" = "除外アプリはありません";
+"settings_section_plain_paste" = "プレーンテキスト貼り付けアプリ";
+"settings_plain_paste_description" = "これらのアプリへは常にプレーンテキストで貼り付けます。";
+"settings_plain_paste_empty" = "アプリは設定されていません";
+"settings_excluded_apps_bundle_id_placeholder" = "バンドル ID（例: com.example.app）";
+"settings_excluded_apps_add" = "追加";
+"settings_section_data" = "データ";
+"settings_clear_confirm_title" = "すべての履歴を消去しますか?";
+"settings_clear_confirm_message" = "ピン留めを含むすべてのクリップボード履歴が削除されます。この操作は取り消せません。";
 
 "launch_at_login_failed_title" = "ログイン時起動を有効にできません";
 "launch_at_login_failed_message" = "ログイン項目への登録に失敗しました。ログイン項目の設定で ClipXS を許可するか、アプリをアプリケーションフォルダに移動してから再度お試しください。";
 "open_login_items_settings" = "ログイン項目を開く";
 
 "type_text" = "文章";
+"type_link" = "リンク";
 "type_image" = "画像";
 "type_files" = "ファイル";
 
@@ -33,6 +112,7 @@
 "manual_paste_body" = "クリップボードにコピーしました。Command+V で貼り付けてください。";
 "cancel" = "キャンセル";
 "later" = "あとで";
+"ok" = "OK";
 
 "welcome_title" = "ClipXS へようこそ";
 "welcome_message" = "Option+Command+V でクリップボード履歴を開けます。選択項目の自動貼り付けには、アクセシビリティの許可が必要です。";
