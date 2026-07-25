@@ -114,6 +114,7 @@ struct HistoryRowView: View {
 
     private var typeLabel: String {
         if entry.isLink { return NSLocalizedString("type_link", comment: "") }
+        if entry.isImageForDisplay { return NSLocalizedString("type_image", comment: "") }
         switch entry.type {
         case .text:
             return NSLocalizedString("type_text", comment: "")

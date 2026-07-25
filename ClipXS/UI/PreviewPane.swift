@@ -120,32 +120,69 @@ struct PreviewPane: View {
                 }
             }
         case .files:
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(entry.fileURLs.enumerated()), id: \.offset) { _, url in
-                        HStack(spacing: 10) {
-                            QuickLookThumbnailView(
-                                url: url,
-                                size: CGSize(width: 72, height: 56),
-                                failurePresentation: .detailed
-                            )
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(url.lastPathComponent)
-                                    .font(.system(size: 12))
-                                    .lineLimit(1)
-                                Text(url.path)
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
+            if entry.fileURLs.count == 1, let url = entry.fileURLs.first {
+                singleFilePreview(for: url)
+            } else {
+                multipleFilePreview(for: entry.fileURLs)
             }
         }
+    }
+
+    private func singleFilePreview(for url: URL) -> some View {
+        VStack(spacing: 0) {
+            GeometryReader { geometry in
+                let previewSize = CGSize(
+                    width: max(1, geometry.size.width - 24),
+                    height: max(1, geometry.size.height - 24)
+                )
+
+                QuickLookThumbnailView(
+                    url: url,
+                    size: previewSize,
+                    failurePresentation: .detailed
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .padding(12)
+            }
+
+            Divider()
+            fileDetails(for: url)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+        }
+    }
+
+    private func multipleFilePreview(for urls: [URL]) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(urls.enumerated()), id: \.offset) { _, url in
+                    HStack(spacing: 10) {
+                        QuickLookThumbnailView(
+                            url: url,
+                            size: CGSize(width: 72, height: 56),
+                            failurePresentation: .detailed
+                        )
+                        fileDetails(for: url)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+        }
+    }
+
+    private func fileDetails(for url: URL) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(url.lastPathComponent)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+            Text(url.path)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func metadata(for entry: ClipboardEntry) -> some View {

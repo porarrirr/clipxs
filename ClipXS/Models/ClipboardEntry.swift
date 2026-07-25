@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 struct ClipboardEntry: Identifiable, Equatable, Hashable {
     let id: UUID
@@ -64,6 +65,23 @@ struct ClipboardEntry: Identifiable, Equatable, Hashable {
             return []
         }
         return paths.map { URL(fileURLWithPath: $0) }
+    }
+
+    /// Display-only classification for Finder file payloads. The stored type
+    /// remains `.files`, so pasting still restores file objects.
+    var isImageForDisplay: Bool {
+        if type == .image {
+            return true
+        }
+        guard type == .files, !fileURLs.isEmpty else {
+            return false
+        }
+        return fileURLs.allSatisfy { url in
+            guard let contentType = UTType(filenameExtension: url.pathExtension.lowercased()) else {
+                return false
+            }
+            return contentType.conforms(to: .image)
+        }
     }
 
     func withPinned(_ pinned: Bool) -> ClipboardEntry {
