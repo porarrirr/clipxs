@@ -58,6 +58,7 @@ targets:
       - path: ClipXS/Services/ContentHash.swift
       - path: ClipXS/Services/TextTransform.swift
       - path: ClipXS/UI/ThumbnailLoader.swift
+      - path: ClipXS/UI/SelectableTextView.swift
       - path: ClipXS/UI/TypeFilter.swift
     settings:
       base:

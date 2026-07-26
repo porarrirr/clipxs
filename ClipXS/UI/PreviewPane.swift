@@ -79,13 +79,7 @@ struct PreviewPane: View {
     private func content(for entry: ClipboardEntry) -> some View {
         switch entry.type {
         case .text:
-            ScrollView {
-                Text(entry.payload)
-                    .font(.system(size: 13))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
+            SelectableTextView(text: entry.payload)
         case .image:
             VStack(spacing: 0) {
                 if let image = ThumbnailLoader.thumbnail(path: entry.payload, maxPixel: 480) {
@@ -107,12 +101,11 @@ struct PreviewPane: View {
                         Label(String(localized: "preview_ocr_label"), systemImage: "text.viewfinder")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        ScrollView {
-                            Text(ocrText)
-                                .font(.system(size: 11))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        SelectableTextView(
+                            text: ocrText,
+                            fontSize: 11,
+                            textContainerInset: .zero
+                        )
                         .frame(maxHeight: 90)
                     }
                     .padding(.horizontal, 12)
