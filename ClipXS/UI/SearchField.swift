@@ -30,6 +30,10 @@ struct SearchField: NSViewRepresentable {
 
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.parent = self
+        // Assigning stringValue clears marked text and aborts IME conversion.
+        if let editor = field.currentEditor() as? NSTextView, editor.hasMarkedText() {
+            return
+        }
         if field.stringValue != text {
             field.stringValue = text
         }
@@ -45,6 +49,15 @@ struct SearchField: NSViewRepresentable {
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
             parent.text = field.stringValue
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                // Let IME confirm conversion. Swallow Return otherwise so the
+                // field does not insert a newline after conversion is committed.
+                return !textView.hasMarkedText()
+            }
+            return false
         }
     }
 }

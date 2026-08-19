@@ -288,10 +288,32 @@ final class HistoryPanelController: NSWindowController {
         18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9
     ]
 
+    /// True while Japanese (or other) IME has inline marked text. Return / arrows /
+    /// Escape must reach the field editor so conversion can be confirmed or cancelled
+    /// instead of pasting the currently highlighted history item.
+    private func isIMEComposing() -> Bool {
+        markedTextView?.hasMarkedText() == true
+    }
+
+    private var markedTextView: NSTextView? {
+        guard let responder = window?.firstResponder else { return nil }
+        if let textView = responder as? NSTextView {
+            return textView
+        }
+        if let field = responder as? NSTextField {
+            return field.currentEditor() as? NSTextView
+        }
+        return nil
+    }
+
     @discardableResult
     private func handleKey(_ event: NSEvent) -> Bool {
         guard isVisible else { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        if isIMEComposing() {
+            return false
+        }
 
         // While editing an entry, keys must reach the text editor; only the
         // editing chords are intercepted (⌘↩ save handled by SwiftUI's
