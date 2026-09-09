@@ -12,8 +12,7 @@ final class HistoryPanelController: NSWindowController {
     private static let panelMargin: CGFloat = 16
 
     private let viewModel = HistoryViewModel()
-    private var frontmostAppBeforePanel: NSRunningApplication?
-    private var frontmostBundleIdBeforePanel: String?
+    private var pasteTargetBeforePanel: PasteTarget?
     private var localKeyMonitor: Any?
     private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
@@ -40,9 +39,9 @@ final class HistoryPanelController: NSWindowController {
         panel.contentView = host
 
         viewModel.onPaste = { [weak self] entry, plainTextOnly in
-            let targetApp = self?.resolvedTargetApp()
+            let target = self?.pasteTargetBeforePanel
             self?.hide()
-            PasteService.paste(entry: entry, targetApp: targetApp, plainTextOnly: plainTextOnly)
+            PasteService.paste(entry: entry, savedTarget: target, plainTextOnly: plainTextOnly)
             self?.clearTargetApp()
         }
         viewModel.onDismiss = { [weak self] in
@@ -68,7 +67,7 @@ final class HistoryPanelController: NSWindowController {
     }
 
     func show() {
-        guard let window else { return }
+        guard let window, !isVisible else { return }
         rememberFrontmostApp()
         viewModel.reload()
         positionNearCursor(window: window)
@@ -250,27 +249,14 @@ final class HistoryPanelController: NSWindowController {
     }
 
     private func rememberFrontmostApp() {
-        let frontmost = NSWorkspace.shared.frontmostApplication
-        guard frontmost?.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
-        frontmostAppBeforePanel = frontmost
-        frontmostBundleIdBeforePanel = frontmost?.bundleIdentifier
-    }
-
-    private func resolvedTargetApp() -> NSRunningApplication? {
-        if let bundleId = frontmostBundleIdBeforePanel,
-           let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
-            .first(where: { !$0.isTerminated }) {
-            return app
-        }
-        if let frontmostAppBeforePanel, !frontmostAppBeforePanel.isTerminated {
-            return frontmostAppBeforePanel
-        }
-        return nil
+        pasteTargetBeforePanel = nil
+        guard let frontmost = NSWorkspace.shared.frontmostApplication,
+              frontmost.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+        pasteTargetBeforePanel = PasteTarget(app: frontmost)
     }
 
     private func clearTargetApp() {
-        frontmostAppBeforePanel = nil
-        frontmostBundleIdBeforePanel = nil
+        pasteTargetBeforePanel = nil
     }
 
     private func handleClickOutside(_ event: NSEvent) {

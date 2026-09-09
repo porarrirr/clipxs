@@ -4,6 +4,62 @@ import Carbon.HIToolbox
 import Foundation
 import UserNotifications
 
+/// Captured before the nonactivating history panel borrows keyboard focus.
+struct PasteTarget {
+    let app: NSRunningApplication
+    let window: AXUIElement?
+    let element: AXUIElement?
+
+    init(app: NSRunningApplication) {
+        self.app = app
+        let application = AXUIElementCreateApplication(app.processIdentifier)
+        element = Self.readElement(application, kAXFocusedUIElementAttribute)
+        window = element.flatMap { Self.readElement($0, kAXWindowAttribute) }
+            ?? Self.readElement(application, kAXFocusedWindowAttribute)
+    }
+
+    private static func readElement(_ owner: AXUIElement, _ attribute: String) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(owner, attribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return unsafeDowncast(value, to: AXUIElement.self)
+    }
+
+    func isFocused() -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier else {
+            return false
+        }
+        let application = AXUIElementCreateApplication(app.processIdentifier)
+        if let window {
+            guard let current = Self.readElement(application, kAXFocusedWindowAttribute),
+                  CFEqual(window, current) else { return false }
+        }
+        if let element {
+            guard let current = Self.readElement(application, kAXFocusedUIElementAttribute),
+                  CFEqual(element, current) else { return false }
+        }
+        return true
+    }
+
+    func restoreFocus() {
+        // Activating an already active app can select a different main window.
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier != app.processIdentifier {
+            app.activate(options: [.activateIgnoringOtherApps])
+        }
+        if let window {
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+            AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
+            AXUIElementSetAttributeValue(
+                AXUIElementCreateApplication(app.processIdentifier),
+                kAXFocusedWindowAttribute as CFString, window
+            )
+        }
+        if let element {
+            AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        }
+    }
+}
+
 enum PasteService {
     private static let vKeyCode = CGKeyCode(kVK_ANSI_V)
     private static let clipxsBundleId = Bundle.main.bundleIdentifier ?? "com.clipxs.ClipXS"
@@ -19,10 +75,11 @@ enum PasteService {
     static func paste(
         entry: ClipboardEntry,
         targetApp: NSRunningApplication? = nil,
+        savedTarget: PasteTarget? = nil,
         plainTextOnly: Bool = false,
         completion: ((Bool) -> Void)? = nil
     ) {
-        let target = resolveTargetApp(preferred: targetApp)
+        let target = savedTarget?.app ?? resolveTargetApp(preferred: targetApp)
 
         guard let target, !target.isTerminated else {
             showNoTargetAlert()
@@ -30,7 +87,7 @@ enum PasteService {
             return
         }
 
-        performPaste(entry: entry, into: target, plainTextOnly: plainTextOnly, completion: completion)
+        performPaste(entry: entry, into: savedTarget ?? PasteTarget(app: target), plainTextOnly: plainTextOnly, completion: completion)
     }
 
     private static func resolveTargetApp(preferred: NSRunningApplication?) -> NSRunningApplication? {
@@ -51,10 +108,11 @@ enum PasteService {
 
     private static func performPaste(
         entry: ClipboardEntry,
-        into target: NSRunningApplication,
+        into destination: PasteTarget,
         plainTextOnly: Bool,
         completion: ((Bool) -> Void)?
     ) {
+        let target = destination.app
         let trusted = isAccessibilityTrusted(prompt: false)
         // Per-app rule: apps on the plain-paste list always receive plain text
         // (terminals, editors where rich formatting is unwanted).
@@ -67,35 +125,37 @@ enum PasteService {
             return
         }
 
-        target.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
-
-        // The frontmost poll already absorbs activation latency, so no fixed
-        // lead-in delay is needed; keep a short settle before sending Cmd+V.
-        waitUntilFrontmost(target, attempts: 15) { isFrontmost in
-            guard isFrontmost else {
-                showManualPasteNotification()
-                completion?(true)
-                return
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                if trusted, postCommandV() {
+        // Let orderOut return keyboard focus before deciding whether restoration
+        // is needed. Never reorder every window of the destination application.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            waitUntilFocused(destination, attempts: 15) { focused in
+                guard focused else {
+                    showManualPasteNotification()
+                    completion?(false)
+                    return
+                }
+                // Check the exact process, window and input immediately before
+                // emitting the global shortcut; app identity alone is insufficient.
+                if trusted, destination.isFocused(), postCommandV() {
                     completion?(true)
                 } else {
                     showManualPasteNotification()
-                    showPasteFailedAlert()
                     completion?(false)
                 }
             }
         }
     }
 
-    private static func waitUntilFrontmost(
-        _ target: NSRunningApplication,
+    private static func waitUntilFocused(
+        _ target: PasteTarget,
         attempts: Int,
         completion: @escaping (Bool) -> Void
     ) {
-        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == target.bundleIdentifier {
+        guard !target.app.isTerminated else {
+            completion(false)
+            return
+        }
+        if target.isFocused() {
             completion(true)
             return
         }
@@ -103,9 +163,9 @@ enum PasteService {
             completion(false)
             return
         }
-        target.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+        target.restoreFocus()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
-            waitUntilFrontmost(target, attempts: attempts - 1, completion: completion)
+            waitUntilFocused(target, attempts: attempts - 1, completion: completion)
         }
     }
 
