@@ -115,6 +115,9 @@ struct PreviewPane: View {
         case .files:
             if entry.fileURLs.count == 1, let url = entry.fileURLs.first {
                 singleFilePreview(for: url)
+            } else if entry.isImageForDisplay {
+                multipleImagePreview(for: entry.fileURLs)
+                    .id(entry.id)
             } else {
                 multipleFilePreview(for: entry.fileURLs)
             }
@@ -142,6 +145,22 @@ struct PreviewPane: View {
             fileDetails(for: url)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+        }
+    }
+
+    private func multipleImagePreview(for urls: [URL]) -> some View {
+        GeometryReader { geometry in
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(Array(urls.enumerated()), id: \.offset) { _, url in
+                        // Give each image the same space as a single-file preview.
+                        // Keep it readable when the queue reduces the pane height.
+                        singleFilePreview(for: url)
+                            .frame(height: max(280, geometry.size.height - 24))
+                    }
+                }
+                .padding(.vertical, 12)
+            }
         }
     }
 
