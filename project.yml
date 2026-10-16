@@ -57,6 +57,11 @@ targets:
       - path: ClipXS/Services/PasteboardRestore.swift
       - path: ClipXS/Services/ContentHash.swift
       - path: ClipXS/Services/TextTransform.swift
+      - path: ClipXS/Services/ClipboardMonitor.swift
+      - path: ClipXS/Services/OCRService.swift
+      - path: ClipXS/Services/PasteQueue.swift
+      - path: ClipXS/Services/PasteService.swift
+      - path: ClipXS/UI/HistoryViewModel.swift
       - path: ClipXS/UI/ThumbnailLoader.swift
       - path: ClipXS/UI/SelectableTextView.swift
       - path: ClipXS/UI/TypeFilter.swift

@@ -101,6 +101,7 @@ final class HistoryPanelController: NSWindowController {
     }
 
     func hide() {
+        viewModel.suspend()
         window?.orderOut(nil)
         removeEventMonitors()
     }

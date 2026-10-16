@@ -4,7 +4,9 @@ import Foundation
 
 @MainActor
 final class HistoryViewModel: ObservableObject {
-    @Published private(set) var allEntries: [ClipboardEntry] = []
+    @Published private(set) var allEntries: [ClipboardEntry] = [] {
+        didSet { invalidateTypeFilter() }
+    }
     @Published var selectedIndex: Int = 0
 
     /// ⌘クリックで作る複数選択。結合貼り付け・キュー投入の対象。
@@ -15,19 +17,36 @@ final class HistoryViewModel: ObservableObject {
     @Published var editingText: String = ""
 
     @Published var searchText: String = "" {
-        didSet { if searchText != oldValue { selectedIndex = 0 } }
+        didSet {
+            if searchText != oldValue {
+                cachedVisibleEntries = nil
+                selectedIndex = 0
+            }
+        }
     }
 
     @Published var typeFilter: TypeFilter = .all {
-        didSet { if typeFilter != oldValue { selectedIndex = 0 } }
+        didSet {
+            if typeFilter != oldValue {
+                invalidateTypeFilter()
+                selectedIndex = 0
+            }
+        }
     }
 
     var onPaste: ((ClipboardEntry, _ plainTextOnly: Bool) -> Void)?
     var onDismiss: (() -> Void)?
 
     private var historyObserver: NSObjectProtocol?
+    private let fetchEntries: (@escaping ([ClipboardEntry]) -> Void) -> Void
+    private var cachedTypeEntries: [ClipboardEntry]?
+    private var cachedVisibleEntries: [ClipboardEntry]?
+    private var isActive = false
+    private var refreshID: UUID?
+    private var needsRefresh = false
 
-    init() {
+    init(fetchEntries: @escaping (@escaping ([ClipboardEntry]) -> Void) -> Void = ClipboardStore.shared.fetchAll) {
+        self.fetchEntries = fetchEntries
         historyObserver = NotificationCenter.default.addObserver(
             forName: .clipxsHistoryDidChange,
             object: nil,
@@ -46,7 +65,27 @@ final class HistoryViewModel: ObservableObject {
     }
 
     var visibleEntries: [ClipboardEntry] {
-        allEntries.filter { typeFilter.matches($0) && matchesSearch($0) }
+        if let cachedVisibleEntries { return cachedVisibleEntries }
+
+        // Search edits reuse classification (including file JSON/UTType work).
+        // Selection and SwiftUI redraws reuse the entire result until an input
+        // changes. With no filters, share the original array's storage.
+        let typed: [ClipboardEntry]
+        if let cachedTypeEntries {
+            typed = cachedTypeEntries
+        } else {
+            typed = typeFilter == .all ? allEntries : allEntries.filter(typeFilter.matches)
+            cachedTypeEntries = typed
+        }
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        let result = query.isEmpty ? typed : typed.filter { matchesSearch($0, query: query) }
+        cachedVisibleEntries = result
+        return result
+    }
+
+    private func invalidateTypeFilter() {
+        cachedTypeEntries = nil
+        cachedVisibleEntries = nil
     }
 
     var selectedEntry: ClipboardEntry? {
@@ -66,6 +105,7 @@ final class HistoryViewModel: ObservableObject {
 
     /// Full reset used when the panel opens.
     func reload() {
+        isActive = true
         searchText = ""
         typeFilter = .all
         selectedIndex = 0
@@ -74,13 +114,29 @@ final class HistoryViewModel: ObservableObject {
         refreshFromStore()
     }
 
+    /// The store keeps capturing while the panel is hidden. The next reload
+    /// fetches the current snapshot, so hidden views need no database reads.
+    func suspend() {
+        isActive = false
+        refreshID = nil
+        needsRefresh = false
+    }
+
     /// Refetch that preserves search, filter, and (when possible) the selection.
     /// Runs on every history change so an open panel updates live.
     private func refreshFromStore() {
-        let selectedId = selectedEntry?.id
-        ClipboardStore.shared.fetchAll { [weak self] entries in
+        guard isActive else { return }
+        guard refreshID == nil else {
+            needsRefresh = true
+            return
+        }
+        let requestID = UUID()
+        refreshID = requestID
+        fetchEntries { [weak self] entries in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.isActive, self.refreshID == requestID else { return }
+                // The user may have navigated while the fetch was running.
+                let selectedId = self.selectedEntry?.id
                 self.allEntries = entries
                 let visible = self.visibleEntries
                 if let selectedId,
@@ -96,13 +152,16 @@ final class HistoryViewModel: ObservableObject {
                 if let editingEntryId = self.editingEntryId, !ids.contains(editingEntryId) {
                     self.cancelEditing()
                 }
+                self.refreshID = nil
+                if self.needsRefresh {
+                    self.needsRefresh = false
+                    self.refreshFromStore()
+                }
             }
         }
     }
 
-    private func matchesSearch(_ entry: ClipboardEntry) -> Bool {
-        let query = searchText.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return true }
+    private func matchesSearch(_ entry: ClipboardEntry, query: String) -> Bool {
         if entry.preview.localizedCaseInsensitiveContains(query) {
             return true
         }

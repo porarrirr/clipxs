@@ -62,6 +62,8 @@ open build/Build/Products/Debug/ClipXS.app
 xcodebuild -scheme ClipXS -derivedDataPath build test
 ```
 
+履歴操作の性能計測結果と再現手順: [Benchmarks/README.md](Benchmarks/README.md)
+
 ## 初回セットアップ
 
 1. `ClipXS.app` を起動する(メニューバーにクリップボードアイコンが表示されます)
