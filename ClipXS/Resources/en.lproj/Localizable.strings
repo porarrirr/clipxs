@@ -36,7 +36,7 @@
 "transform_url_decode" = "URL Decode";
 
 "queue_bar_count" = "Paste queue: %d";
-"queue_bar_hint" = "Press %@ to paste the next item";
+"queue_bar_hint" = "Press ⌘V / Ctrl+V or %@ to paste the next item";
 "queue_clear" = "Clear";
 
 "multi_select_count" = "%d selected";

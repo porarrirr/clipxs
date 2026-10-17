@@ -61,6 +61,7 @@ struct PasteTarget {
 }
 
 enum PasteService {
+    static let generatedPasteMarker: Int64 = 0x4350585350415354
     private static let vKeyCode = CGKeyCode(kVK_ANSI_V)
     private static let clipxsBundleId = Bundle.main.bundleIdentifier ?? "com.clipxs.ClipXS"
 
@@ -176,6 +177,8 @@ enum PasteService {
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
         else { return false }
 
+        keyDown.setIntegerValueField(.eventSourceUserData, value: generatedPasteMarker)
+        keyUp.setIntegerValueField(.eventSourceUserData, value: generatedPasteMarker)
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
         keyDown.post(tap: .cghidEventTap)

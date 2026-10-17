@@ -36,7 +36,7 @@
 "transform_url_decode" = "URL デコード";
 
 "queue_bar_count" = "ペーストキュー: %d 件";
-"queue_bar_hint" = "%@ で次の項目を貼り付け";
+"queue_bar_hint" = "⌘V / Ctrl+V または %@ で次の項目を貼り付け";
 "queue_clear" = "クリア";
 
 "multi_select_count" = "%d 件選択中";
