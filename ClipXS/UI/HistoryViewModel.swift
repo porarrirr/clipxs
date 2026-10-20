@@ -8,6 +8,9 @@ final class HistoryViewModel: ObservableObject {
         didSet { invalidateTypeFilter() }
     }
     @Published var selectedIndex: Int = 0
+    /// Recreate the list's scroll state on every panel presentation, even when
+    /// the selection was already at zero and emits no SwiftUI onChange.
+    @Published private(set) var presentationID = UUID()
 
     /// ⌘クリックで作る複数選択。結合貼り付け・キュー投入の対象。
     @Published var multiSelectedIds: Set<UUID> = []
@@ -111,7 +114,8 @@ final class HistoryViewModel: ObservableObject {
         selectedIndex = 0
         multiSelectedIds = []
         cancelEditing()
-        refreshFromStore()
+        presentationID = UUID()
+        refreshFromStore(resetToFirst: true)
     }
 
     /// The store keeps capturing while the panel is hidden. The next reload
@@ -124,7 +128,7 @@ final class HistoryViewModel: ObservableObject {
 
     /// Refetch that preserves search, filter, and (when possible) the selection.
     /// Runs on every history change so an open panel updates live.
-    private func refreshFromStore() {
+    private func refreshFromStore(resetToFirst: Bool = false) {
         guard isActive else { return }
         guard refreshID == nil else {
             needsRefresh = true
@@ -136,7 +140,11 @@ final class HistoryViewModel: ObservableObject {
             Task { @MainActor in
                 guard let self, self.isActive, self.refreshID == requestID else { return }
                 // The user may have navigated while the fetch was running.
-                let selectedId = self.selectedEntry?.id
+                // Opening should select the newest snapshot's first row, not
+                // follow the previous snapshot's first row down the list.
+                // Still honor keyboard navigation during the asynchronous fetch.
+                let selectedId = resetToFirst && self.selectedIndex == 0
+                    ? nil : self.selectedEntry?.id
                 self.allEntries = entries
                 let visible = self.visibleEntries
                 if let selectedId,

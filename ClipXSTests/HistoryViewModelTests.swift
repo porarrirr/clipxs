@@ -166,6 +166,36 @@ final class HistoryViewModelTests: XCTestCase {
         XCTAssertEqual(model.selectedIndex, 0)
     }
 
+    func testReopeningResetsScrollIdentityEvenWhenSelectionIsAlreadyFirst() async {
+        let entries = (0..<3).map { ClipboardEntry(type: .text, preview: "item \($0)", payload: "item \($0)") }
+        let model = HistoryViewModel(fetchEntries: { $0(entries) })
+        await load(model)
+        let firstPresentation = model.presentationID
+        model.suspend()
+        await load(model)
+        XCTAssertNotEqual(model.presentationID, firstPresentation)
+        XCTAssertEqual(model.selectedIndex, 0)
+
+        model.selectNext()
+        model.suspend()
+        await load(model)
+        XCTAssertEqual(model.selectedIndex, 0)
+        XCTAssertEqual(model.selectedEntry?.id, entries.first?.id)
+    }
+
+    func testReopeningSelectsFirstEntryAfterNewHistoryArrivesWhileHidden() async {
+        let old = ClipboardEntry(type: .text, preview: "old", payload: "old")
+        let newest = ClipboardEntry(type: .text, preview: "newest", payload: "newest")
+        var entries = [old]
+        let model = HistoryViewModel(fetchEntries: { $0(entries) })
+        await load(model)
+        model.suspend()
+        entries = [newest, old]
+        await load(model)
+        XCTAssertEqual(model.selectedIndex, 0)
+        XCTAssertEqual(model.selectedEntry?.id, newest.id)
+    }
+
     private func load(_ model: HistoryViewModel) async {
         let loaded = expectation(description: "history loaded")
         let subscription = model.$allEntries.dropFirst().prefix(1).sink { _ in loaded.fulfill() }

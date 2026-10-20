@@ -110,6 +110,7 @@ struct HistoryView: View {
         } else {
             HStack(spacing: 0) {
                 entryList(visible)
+                    .id(viewModel.presentationID)
                     .frame(width: Self.listWidth)
                 Divider()
                 PreviewPane(viewModel: viewModel)
