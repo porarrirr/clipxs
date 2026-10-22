@@ -196,6 +196,86 @@ final class HistoryViewModelTests: XCTestCase {
         XCTAssertEqual(model.selectedEntry?.id, newest.id)
     }
 
+    func testMergeAndQueueKeepSelectedImagesTogetherInVisibleOrder() async throws {
+        let first = ClipboardEntry(type: .image, preview: "capture", payload: "/tmp/capture.png")
+        let payload = String(data: try JSONEncoder().encode(["/tmp/finder.png"]), encoding: .utf8)!
+        let second = ClipboardEntry(type: .files, preview: "finder", payload: payload)
+        let queue = PasteQueue(monitorsKeyboard: false) { _, completion in completion(true) }
+        let model = HistoryViewModel(fetchEntries: { $0([first, second]) }, pasteQueue: queue)
+        await load(model)
+        model.multiSelectedIds = [second.id, first.id]
+        XCTAssertEqual(model.mergeableSelectionCount, 2)
+        var pasted: ClipboardEntry?
+        model.onPaste = { entry, plain in
+            pasted = entry
+            XCTAssertFalse(plain)
+        }
+        model.pasteMergedSelection()
+        XCTAssertEqual(pasted?.type, .files)
+        XCTAssertEqual(pasted?.fileURLs.map(\.path), [first.payload, "/tmp/finder.png"])
+        XCTAssertTrue(model.multiSelectedIds.isEmpty)
+
+        var dismissed = false
+        model.onDismiss = { dismissed = true }
+        model.multiSelectedIds = [first.id, second.id]
+        model.enqueueSelection()
+        XCTAssertTrue(dismissed, "release panel keyboard focus so the paste shortcut reaches the destination")
+        XCTAssertEqual(queue.entries.count, 1)
+        XCTAssertEqual(queue.entries.first?.fileURLs, pasted?.fileURLs)
+        queue.pasteNext()
+        await drainMainActor()
+        XCTAssertTrue(queue.entries.isEmpty)
+    }
+
+    func testTextMergeKeepsOrderAndMixedMergeDoesNotDropImages() async {
+        let first = ClipboardEntry(type: .text, preview: "one", payload: "one")
+        let second = ClipboardEntry(type: .text, preview: "two", payload: "two")
+        let image = ClipboardEntry(type: .image, preview: "image", payload: "/tmp/a.png")
+        let model = HistoryViewModel(fetchEntries: { $0([first, second, image]) })
+        await load(model)
+        var pasted: ClipboardEntry?
+        model.onPaste = { entry, plain in
+            pasted = entry
+            XCTAssertTrue(plain)
+        }
+        model.multiSelectedIds = [first.id, second.id]
+        model.pasteMergedSelection()
+        XCTAssertEqual(pasted?.payload, "one\ntwo")
+        pasted = nil
+        model.multiSelectedIds = [first.id, image.id]
+        XCTAssertEqual(model.mergeableSelectionCount, 0)
+        model.pasteMergedSelection()
+        XCTAssertNil(pasted)
+        XCTAssertEqual(model.multiSelectedIds.count, 2)
+    }
+
+    func testExplicitFilePathPasteUsesTextAndMixedEntriesRemainIntactInQueue() async throws {
+        let path = "/tmp/document.pdf"
+        let data = try JSONEncoder().encode(FileClipboardPayload(paths: [path], parts: [
+            .text(plain: "searchable accompaniment", rich: nil, format: nil), .file(path: path)
+        ]))
+        let entry = ClipboardEntry(type: .files, preview: "document.pdf", payload: String(data: data, encoding: .utf8)!)
+        let other = ClipboardEntry(type: .files, preview: "other.pdf", payload: "[\"/tmp/other.pdf\"]")
+        let queue = PasteQueue(monitorsKeyboard: false) { _, completion in completion(true) }
+        let model = HistoryViewModel(fetchEntries: { $0([entry, other]) }, pasteQueue: queue)
+        await load(model)
+        var pasted: ClipboardEntry?
+        model.onPaste = { item, plain in
+            pasted = item
+            XCTAssertTrue(plain)
+        }
+        model.pasteFilePaths(entry: entry)
+        XCTAssertEqual(pasted?.type, .text)
+        XCTAssertEqual(pasted?.payload, path)
+        model.searchText = "accompaniment"
+        XCTAssertEqual(model.visibleEntries.map(\.id), [entry.id])
+        model.searchText = ""
+        model.multiSelectedIds = [entry.id, other.id]
+        XCTAssertEqual(model.mergeableSelectionCount, 0, "merging must not discard accompanying text")
+        model.enqueueSelection()
+        XCTAssertEqual(queue.entries, [entry, other])
+    }
+
     private func load(_ model: HistoryViewModel) async {
         let loaded = expectation(description: "history loaded")
         let subscription = model.$allEntries.dropFirst().prefix(1).sink { _ in loaded.fulfill() }

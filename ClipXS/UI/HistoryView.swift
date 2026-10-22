@@ -173,6 +173,11 @@ struct HistoryView: View {
         Button(String(localized: "context_paste")) {
             viewModel.paste(entry: entry)
         }
+        if !entry.fileURLs.isEmpty {
+            Button(String(localized: "context_paste_paths")) {
+                viewModel.pasteFilePaths(entry: entry)
+            }
+        }
         if entry.richFormat != nil {
             Button(String(localized: "context_paste_plain")) {
                 viewModel.paste(entry: entry, plainTextOnly: true)
@@ -203,6 +208,7 @@ struct HistoryView: View {
             Button(String(format: NSLocalizedString("context_merge_paste", comment: ""), viewModel.multiSelectedIds.count)) {
                 viewModel.pasteMergedSelection()
             }
+            .disabled(viewModel.mergeableSelectionCount < 2)
             Button(String(format: NSLocalizedString("context_enqueue_selection", comment: ""), viewModel.multiSelectedIds.count)) {
                 viewModel.enqueueSelection()
             }

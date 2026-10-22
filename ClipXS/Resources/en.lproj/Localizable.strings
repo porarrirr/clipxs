@@ -15,6 +15,7 @@
 "filter_image" = "Images";
 "filter_file" = "Files";
 
+"context_paste_paths" = "Paste File Paths";
 "context_paste" = "Paste";
 "context_paste_plain" = "Paste as Plain Text";
 "context_copy" = "Copy";

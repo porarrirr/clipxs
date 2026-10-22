@@ -113,6 +113,19 @@ struct PreviewPane: View {
                 }
             }
         case .files:
+            VStack(spacing: 0) {
+                if !entry.accompanyingText.isEmpty {
+                    SelectableTextView(text: entry.accompanyingText)
+                        .frame(maxHeight: 120)
+                    Divider()
+                }
+                fileContent(for: entry)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func fileContent(for entry: ClipboardEntry) -> some View {
             if entry.fileURLs.count == 1, let url = entry.fileURLs.first {
                 singleFilePreview(for: url)
             } else if entry.isImageForDisplay {
@@ -121,7 +134,6 @@ struct PreviewPane: View {
             } else {
                 multipleFilePreview(for: entry.fileURLs)
             }
-        }
     }
 
     private func singleFilePreview(for url: URL) -> some View {

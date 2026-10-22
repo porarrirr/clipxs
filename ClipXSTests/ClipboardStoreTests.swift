@@ -52,6 +52,22 @@ final class ClipboardStoreTests: XCTestCase {
         return result
     }
 
+    func testMixedFileAndTextPayloadSurvivesStorageAndPinning() throws {
+        let parts: [ClipboardPart] = [.text(plain: "日本語", rich: Data("<b>日本語</b>".utf8), format: .html),
+                                      .file(path: "/tmp/document.pdf")]
+        let data = try JSONEncoder().encode(FileClipboardPayload(paths: ["/tmp/document.pdf"], parts: parts))
+        let entry = ClipboardEntry(type: .files, preview: "mixed", payload: String(data: data, encoding: .utf8)!)
+        let store = ClipboardStore(databaseURL: dbURL)
+        store.insert(CapturedClipboardItem(entry: entry, contentHash: ContentHash.sha256(data)))
+        let fetched = try XCTUnwrap(fetchAllSync(store).first)
+        XCTAssertEqual(fetched.preservedParts, parts)
+        XCTAssertEqual(fetched.fileURLs.map(\.path), ["/tmp/document.pdf"])
+        store.setPinned(true, id: fetched.id)
+        let pinned = try XCTUnwrap(fetchAllSync(store).first)
+        XCTAssertTrue(pinned.isPinned)
+        XCTAssertEqual(pinned.withPinned(false).preservedParts, parts)
+    }
+
     // MARK: - Migration
 
     func testMigratesV0DatabaseKeepingData() throws {
@@ -319,6 +335,58 @@ final class ClipboardStoreTests: XCTestCase {
 
         entries = fetchAllSync(store)
         XCTAssertEqual(entries.map(\.payload), ["keep"])
+    }
+
+    // MARK: - SQLite statement lifetime and value conversion
+
+    func testAllMetadataSurvivesDatabaseReopen() throws {
+        let richPayload = Data([0, 1, 127, 128, 255])
+        let entry = ClipboardEntry(
+            type: .text,
+            preview: "日本語 'preview'",
+            payload: "日本語 'text'\nsecond line",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000.125),
+            isPinned: true,
+            richPayload: richPayload,
+            richFormat: .rtf,
+            sourceBundleId: "com.example.source",
+            ocrText: "認識された 'text'"
+        )
+
+        do {
+            let store = ClipboardStore(databaseURL: dbURL)
+            store.insert(CapturedClipboardItem(entry: entry, contentHash: "metadata-hash"))
+            XCTAssertEqual(fetchAllSync(store).count, 1)
+        }
+
+        let reopenedStore = ClipboardStore(databaseURL: dbURL)
+        let restored = try XCTUnwrap(fetchAllSync(reopenedStore).first)
+        XCTAssertEqual(restored.id, entry.id)
+        XCTAssertEqual(restored.type, entry.type)
+        XCTAssertEqual(restored.preview, entry.preview)
+        XCTAssertEqual(restored.payload, entry.payload)
+        XCTAssertEqual(restored.createdAt, entry.createdAt)
+        XCTAssertTrue(restored.isPinned)
+        XCTAssertEqual(restored.richPayload, richPayload)
+        XCTAssertEqual(restored.richFormat, entry.richFormat)
+        XCTAssertEqual(restored.sourceBundleId, entry.sourceBundleId)
+        XCTAssertEqual(restored.ocrText, entry.ocrText)
+    }
+
+    func testStatementsReleaseDatabaseLocksAfterDeduplicationAndFetch() throws {
+        let store = ClipboardStore(databaseURL: dbURL)
+        store.insert(makeItem("duplicate"))
+        store.insert(makeItem("duplicate"))
+        XCTAssertEqual(fetchAllSync(store).count, 1)
+
+        // A leaked SELECT stopped at SQLITE_ROW would keep a read lock and
+        // prevent another connection from acquiring this exclusive transaction.
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(dbURL.path, &db), SQLITE_OK)
+        defer { sqlite3_close(db) }
+        XCTAssertEqual(sqlite3_exec(db, "BEGIN EXCLUSIVE;", nil, nil, nil), SQLITE_OK)
+        XCTAssertEqual(sqlite3_exec(db, "ROLLBACK;", nil, nil, nil), SQLITE_OK)
+        withExtendedLifetime(store) {}
     }
 
     // MARK: - Utilities

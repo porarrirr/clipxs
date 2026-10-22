@@ -41,6 +41,7 @@ final class HistoryViewModel: ObservableObject {
     var onDismiss: (() -> Void)?
 
     private var historyObserver: NSObjectProtocol?
+    private let pasteQueue: PasteQueue
     private let fetchEntries: (@escaping ([ClipboardEntry]) -> Void) -> Void
     private var cachedTypeEntries: [ClipboardEntry]?
     private var cachedVisibleEntries: [ClipboardEntry]?
@@ -48,8 +49,12 @@ final class HistoryViewModel: ObservableObject {
     private var refreshID: UUID?
     private var needsRefresh = false
 
-    init(fetchEntries: @escaping (@escaping ([ClipboardEntry]) -> Void) -> Void = ClipboardStore.shared.fetchAll) {
+    init(
+        fetchEntries: @escaping (@escaping ([ClipboardEntry]) -> Void) -> Void = ClipboardStore.shared.fetchAll,
+        pasteQueue: PasteQueue? = nil
+    ) {
         self.fetchEntries = fetchEntries
+        self.pasteQueue = pasteQueue ?? .shared
         historyObserver = NotificationCenter.default.addObserver(
             forName: .clipxsHistoryDidChange,
             object: nil,
@@ -178,6 +183,7 @@ final class HistoryViewModel: ObservableObject {
         if entry.type != .image, entry.payload.localizedCaseInsensitiveContains(query) {
             return true
         }
+        if entry.accompanyingText.localizedCaseInsensitiveContains(query) { return true }
         if let ocrText = entry.ocrText, ocrText.localizedCaseInsensitiveContains(query) {
             return true
         }
@@ -227,6 +233,12 @@ final class HistoryViewModel: ObservableObject {
         onPaste?(visible[index], false)
     }
 
+    func pasteFilePaths(entry: ClipboardEntry) {
+        let paths = entry.fileURLs.map(\.path).joined(separator: "\n")
+        guard !paths.isEmpty else { return }
+        onPaste?(ClipboardEntry(type: .text, preview: PasteboardCapture.textPreview(from: paths), payload: paths), true)
+    }
+
     /// Pastes the entry's text run through a filter, always as plain text.
     /// The stored entry itself is left untouched.
     func pasteTransformed(entry: ClipboardEntry, transform: TextTransform) {
@@ -253,60 +265,45 @@ final class HistoryViewModel: ObservableObject {
 
     func copyOCRText(entry: ClipboardEntry) {
         guard let ocrText = entry.ocrText, !ocrText.isEmpty else { return }
-        ClipboardMonitor.shared.suppressNextCapture()
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(ocrText, forType: .string)
+        ClipboardMonitor.shared.performWithoutCapture {
+            PasteboardRestore.restore(ClipboardEntry(type: .text, preview: ocrText, payload: ocrText))
+        }
     }
 
     // MARK: - Merge & queue
 
-    /// Text representation used for merge paste; images have no text.
-    private func mergeText(for entry: ClipboardEntry) -> String? {
-        switch entry.type {
-        case .text:
-            return entry.payload
-        case .files:
-            guard let data = entry.payload.data(using: .utf8),
-                  let paths = try? JSONDecoder().decode([String].self, from: data)
-            else { return nil }
-            return paths.joined(separator: "\n")
-        case .image:
-            return nil
-        }
-    }
-
     var mergeableSelectionCount: Int {
-        multiSelectedEntries.compactMap(mergeText(for:)).count
+        let entries = multiSelectedEntries
+        return ClipboardEntry.merging(entries) == nil ? 0 : entries.count
     }
 
-    /// Joins the multi-selected entries (visible order) with newlines and
-    /// pastes the result as plain text.
+    /// Text is joined with newlines; images and files retain their attachment types.
     func pasteMergedSelection() {
-        let texts = multiSelectedEntries.compactMap(mergeText(for:))
-        guard !texts.isEmpty else { return }
-        let merged = texts.joined(separator: "\n")
-        let ephemeral = ClipboardEntry(
-            type: .text,
-            preview: PasteboardCapture.textPreview(from: merged),
-            payload: merged
-        )
+        guard let merged = ClipboardEntry.merging(multiSelectedEntries) else { return }
         clearMultiSelection()
-        onPaste?(ephemeral, true)
+        onPaste?(merged, merged.type == .text)
     }
 
-    /// Adds the multi-selection (or, when empty, the highlighted entry) to the
-    /// paste queue in visible order.
+    /// Selected attachments form one queue item so a single paste inserts them all.
+    /// Text and mixed selections retain sequential queue behavior.
     func enqueueSelection() {
         let targets = multiSelectedIds.isEmpty
             ? selectedEntry.map { [$0] } ?? []
             : multiSelectedEntries
         guard !targets.isEmpty else { return }
-        PasteQueue.shared.enqueue(targets)
+        if targets.count > 1, targets.allSatisfy({ $0.type != .text }),
+           let merged = ClipboardEntry.merging(targets) {
+            pasteQueue.enqueue([merged])
+        } else {
+            pasteQueue.enqueue(targets)
+        }
         clearMultiSelection()
+        onDismiss?()
     }
 
     func enqueue(entry: ClipboardEntry) {
-        PasteQueue.shared.enqueue([entry])
+        pasteQueue.enqueue([entry])
+        onDismiss?()
     }
 
     // MARK: - Editing
@@ -360,8 +357,9 @@ final class HistoryViewModel: ObservableObject {
 
     /// Copies the entry back to the clipboard without pasting anywhere.
     func copyOnly(entry: ClipboardEntry) {
-        ClipboardMonitor.shared.suppressNextCapture()
-        PasteboardRestore.restore(entry)
+        ClipboardMonitor.shared.performWithoutCapture {
+            PasteboardRestore.restore(entry)
+        }
     }
 
     func dismiss() {

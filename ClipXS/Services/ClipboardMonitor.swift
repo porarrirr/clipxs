@@ -6,7 +6,6 @@ final class ClipboardMonitor {
 
     private var timer: Timer?
     private var lastChangeCount = NSPasteboard.general.changeCount
-    private var ignoreNextChange = false
 
     private init() {}
 
@@ -24,9 +23,12 @@ final class ClipboardMonitor {
         timer = nil
     }
 
-    func suppressNextCapture() {
-        ignoreNextChange = true
-        lastChangeCount = NSPasteboard.general.changeCount
+    /// Account for our synchronous clipboard write, including a failed write
+    /// rolled back by PasteboardRestore. Never suppress the user's next copy.
+    @discardableResult
+    func performWithoutCapture(_ write: () -> Bool) -> Bool {
+        defer { lastChangeCount = NSPasteboard.general.changeCount }
+        return write()
     }
 
     private func poll() {
@@ -34,11 +36,6 @@ final class ClipboardMonitor {
         let count = pasteboard.changeCount
         guard count != lastChangeCount else { return }
         lastChangeCount = count
-
-        if ignoreNextChange {
-            ignoreNextChange = false
-            return
-        }
 
         // Frontmost app at poll time is the best available guess at the copy's
         // source (the 0.5s polling window makes this a heuristic).

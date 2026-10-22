@@ -35,7 +35,8 @@ enum PasteboardCapture {
             return nil
         }
         if let files = readFileURLs(from: pasteboard), !files.isEmpty {
-            return makeFilesItem(urls: files, sourceBundleId: sourceBundleId)
+            return makeMixedItem(from: pasteboard, files: files, sourceBundleId: sourceBundleId)
+                ?? makeFilesItem(urls: files, sourceBundleId: sourceBundleId)
         }
         if let imageItem = makeImageItem(from: pasteboard, sourceBundleId: sourceBundleId) {
             return imageItem
@@ -85,6 +86,81 @@ enum PasteboardCapture {
         return CapturedClipboardItem(entry: entry, contentHash: hash)
     }
 
+    private static func makeMixedItem(
+        from pasteboard: NSPasteboard, files: [URL], sourceBundleId: String?
+    ) -> CapturedClipboardItem? {
+        guard let items = pasteboard.pasteboardItems else { return nil }
+        var parts: [ClipboardPart] = []
+        for item in items {
+            if let value = item.string(forType: .fileURL),
+               let url = URL(string: value), url.isFileURL {
+                parts.append(.file(path: url.path))
+            } else if let data = item.data(forType: .png), NSImage(data: data) != nil {
+                parts.append(.image(png: data))
+            } else if let data = item.data(forType: .tiff),
+                      let bitmap = NSBitmapImageRep(data: data),
+                      let png = bitmap.representation(using: .png, properties: [:]) {
+                parts.append(.image(png: png))
+            } else if let text = textContent(
+                plain: item.string(forType: .string),
+                rtf: item.data(forType: .rtf), html: item.data(forType: .html)
+            ) {
+                parts.append(.text(plain: text.plain, rich: text.rich, format: text.format))
+            }
+        }
+        let paths = parts.compactMap { part -> String? in
+            if case let .file(path) = part { return path }
+            return nil
+        }
+        // Alternate representations on a file item are not accompanying text.
+        // Only preserve a mixed envelope when distinct items carry other content.
+        guard paths == files.map(\.path), parts.count > paths.count else { return nil }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        guard let data = try? encoder.encode(FileClipboardPayload(paths: paths, parts: parts)),
+              let payload = String(data: data, encoding: .utf8) else { return nil }
+        let preview = parts.compactMap { part -> String? in
+            switch part {
+            case let .file(path): return URL(fileURLWithPath: path).lastPathComponent
+            case let .text(plain, _, _): return plain
+            case .image: return NSLocalizedString("image_preview", comment: "")
+            }
+        }.joined(separator: " · ")
+        return CapturedClipboardItem(
+            entry: ClipboardEntry(type: .files, preview: textPreview(from: preview), payload: payload,
+                                  sourceBundleId: sourceBundleId),
+            contentHash: ContentHash.sha256(data)
+        )
+    }
+
+    private static func textContent(
+        plain: String?, rtf: Data?, html: Data?
+    ) -> (plain: String, rich: Data?, format: RichTextFormat?)? {
+        let rich: Data?
+        let format: RichTextFormat?
+        if let rtf, rtf.count <= maxRichPayloadBytes {
+            rich = rtf
+            format = .rtf
+        } else if let html, html.count <= maxRichPayloadBytes {
+            rich = html
+            format = .html
+        } else {
+            rich = nil
+            format = nil
+        }
+        var text = plain
+        if text == nil, let rich, let format {
+            let documentType: NSAttributedString.DocumentType = format == .rtf ? .rtf : .html
+            text = (try? NSAttributedString(
+                data: rich,
+                options: [.documentType: documentType, .characterEncoding: String.Encoding.utf8.rawValue],
+                documentAttributes: nil
+            ))?.string
+        }
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return (text, rich, format)
+    }
+
     private static func makeImageItem(from pasteboard: NSPasteboard, sourceBundleId: String?) -> CapturedClipboardItem? {
         let pngData: Data?
         if let image = pasteboard.readObjects(forClasses: [NSImage.self])?.first as? NSImage,
@@ -111,31 +187,20 @@ enum PasteboardCapture {
     }
 
     private static func makeTextItem(from pasteboard: NSPasteboard, sourceBundleId: String?) -> CapturedClipboardItem? {
-        guard let text = pasteboard.string(forType: .string) else { return nil }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
+        guard let content = textContent(
+            plain: pasteboard.string(forType: .string),
+            rtf: pasteboard.data(forType: .rtf), html: pasteboard.data(forType: .html)
+        ) else { return nil }
+        let text = content.plain
         let preview = textPreview(from: text)
-        // Hash the plain string only, so rich and plain copies of the same
-        // text still dedup against each other.
         let hash = ContentHash.sha256(text)
-
-        var richPayload: Data?
-        var richFormat: RichTextFormat?
-        if let rtf = pasteboard.data(forType: .rtf), rtf.count <= maxRichPayloadBytes {
-            richPayload = rtf
-            richFormat = .rtf
-        } else if let html = pasteboard.data(forType: .html), html.count <= maxRichPayloadBytes {
-            richPayload = html
-            richFormat = .html
-        }
 
         let entry = ClipboardEntry(
             type: .text,
             preview: preview,
             payload: text,
-            richPayload: richPayload,
-            richFormat: richFormat,
+            richPayload: content.rich,
+            richFormat: content.format,
             sourceBundleId: sourceBundleId
         )
         return CapturedClipboardItem(entry: entry, contentHash: hash)

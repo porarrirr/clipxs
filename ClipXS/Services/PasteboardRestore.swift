@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 enum PasteboardRestore {
     @discardableResult
@@ -8,53 +9,97 @@ enum PasteboardRestore {
         plainTextOnly: Bool = false,
         to pasteboard: NSPasteboard = .general
     ) -> Bool {
-        pasteboard.clearContents()
+        // Load and validate everything before touching the destination clipboard.
+        guard let items = makeItems(entry, plainTextOnly: plainTextOnly), !items.isEmpty else { return false }
+        return replaceContents(items, on: pasteboard)
+    }
 
+    static func replaceContents(
+        _ items: [NSPasteboardItem],
+        on pasteboard: NSPasteboard,
+        write: (NSPasteboard, [NSPasteboardItem]) -> Bool = { $0.writeObjects($1) }
+    ) -> Bool {
+        let previous: [NSPasteboardItem] = pasteboard.pasteboardItems?.map { original in
+            let copy = NSPasteboardItem()
+            for type in original.types {
+                if let data = original.data(forType: type) { copy.setData(data, forType: type) }
+            }
+            return copy
+        } ?? []
+        pasteboard.clearContents()
+        guard write(pasteboard, items) else {
+            pasteboard.clearContents()
+            if !previous.isEmpty { pasteboard.writeObjects(previous) }
+            return false
+        }
+        return true
+    }
+
+    private static func makeItems(_ entry: ClipboardEntry, plainTextOnly: Bool) -> [NSPasteboardItem]? {
         switch entry.type {
         case .text:
-            if !plainTextOnly,
-               let rich = entry.richPayload,
-               let format = entry.richFormat {
-                let richType: NSPasteboard.PasteboardType = format == .rtf ? .rtf : .html
-                pasteboard.declareTypes([richType, .string], owner: nil)
-                if pasteboard.setData(rich, forType: richType),
-                   pasteboard.setString(entry.payload, forType: .string) {
-                    return true
-                }
-                pasteboard.clearContents()
-            }
-            return pasteboard.setString(entry.payload, forType: .string)
+            return [textItem(entry.payload, rich: plainTextOnly ? nil : entry.richPayload, format: entry.richFormat)]
         case .image:
-            guard let image = NSImage(contentsOfFile: entry.payload) else { return false }
-            return pasteboard.writeObjects([image])
+            guard let image = NSImage(contentsOfFile: entry.payload),
+                  let item = imageItem(image) else { return nil }
+            return [item]
         case .files:
             let urls = entry.fileURLs
-                .filter { FileManager.default.fileExists(atPath: $0.path) }
-            guard !urls.isEmpty else { return false }
-
-            var wroteFileObjects = pasteboard.writeObjects(urls as [NSURL])
-            if !wroteFileObjects {
-                let items: [NSPasteboardItem] = urls.map { url in
-                    let item = NSPasteboardItem()
-                    item.setString(url.absoluteString, forType: .fileURL)
-                    item.setString(url.path, forType: .legacyFilenames)
-                    return item
+            guard !urls.isEmpty,
+                  urls.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) else { return nil }
+            if let parts = entry.preservedParts {
+                let paths = parts.compactMap { part -> String? in
+                    if case let .file(path) = part { return path }
+                    return nil
                 }
-                wroteFileObjects = pasteboard.writeObjects(items)
+                guard paths == urls.map(\.path) else { return nil }
+                var items: [NSPasteboardItem] = []
+                for part in parts {
+                    switch part {
+                    case let .file(path):
+                        items.append(fileItem(URL(fileURLWithPath: path)))
+                    case let .text(plain, rich, format):
+                        items.append(textItem(plain, rich: plainTextOnly ? nil : rich, format: format))
+                    case let .image(png):
+                        guard let image = NSImage(data: png), let item = imageItem(image) else { return nil }
+                        items.append(item)
+                    }
+                }
+                return items
             }
-
-            // Targets that only accept plain text (text fields, terminals) have
-            // no file-object type to read; add the POSIX path as text on the
-            // same pasteboard item so paste still succeeds there, alongside the
-            // real file object for targets that do support it.
-            let pathText = urls.map(\.path).joined(separator: "\n")
-            let wroteText = pasteboard.setString(pathText, forType: .string)
-
-            return wroteFileObjects || wroteText
+            // Ordinary files and folders are attachments too. Paths are only
+            // emitted by the explicit "Paste File Paths" action.
+            return urls.map(fileItem)
         }
     }
-}
 
-private extension NSPasteboard.PasteboardType {
-    static let legacyFilenames = NSPasteboard.PasteboardType("NSFilenamesPboardType")
+    private static func textItem(_ text: String, rich: Data?, format: RichTextFormat?) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        item.setString(text, forType: .string)
+        if let rich, let format { item.setData(rich, forType: format == .rtf ? .rtf : .html) }
+        return item
+    }
+
+    private static func imageItem(_ image: NSImage) -> NSPasteboardItem? {
+        guard let tiff = image.tiffRepresentation else { return nil }
+        let item = NSPasteboardItem()
+        item.setData(tiff, forType: .tiff)
+        if let bitmap = NSBitmapImageRep(data: tiff),
+           let png = bitmap.representation(using: .png, properties: [:]) {
+            item.setData(png, forType: .png)
+        }
+        return item
+    }
+
+    private static func fileItem(_ url: URL) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        item.setString(url.absoluteString, forType: .fileURL)
+        if UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true,
+           let image = NSImage(contentsOf: url), let pixels = imageItem(image) {
+            for type in pixels.types {
+                if let data = pixels.data(forType: type) { item.setData(data, forType: type) }
+            }
+        }
+        return item
+    }
 }

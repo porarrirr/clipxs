@@ -119,8 +119,10 @@ enum PasteService {
         // (terminals, editors where rich formatting is unwanted).
         let forcePlain = entry.type == .text
             && SettingsAccess.plainPasteBundleIds.contains(target.bundleIdentifier ?? "")
-        ClipboardMonitor.shared.suppressNextCapture()
-        guard PasteboardRestore.restore(entry, plainTextOnly: plainTextOnly || forcePlain) else {
+        let restored = ClipboardMonitor.shared.performWithoutCapture {
+            PasteboardRestore.restore(entry, plainTextOnly: plainTextOnly || forcePlain)
+        }
+        guard restored else {
             showPasteFailedAlert()
             completion?(false)
             return
@@ -138,7 +140,11 @@ enum PasteService {
                 // Check the exact process, window and input immediately before
                 // emitting the global shortcut; app identity alone is insufficient.
                 if trusted, destination.isFocused(), postCommandV() {
-                    completion?(true)
+                    // Posting an event is asynchronous. Keep the clipboard stable
+                    // while the destination handles it before advancing the queue.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        completion?(true)
+                    }
                 } else {
                     showManualPasteNotification()
                     completion?(false)

@@ -109,32 +109,26 @@ final class ClipboardStore {
 
     private func userVersion() -> Int32 {
         guard let db else { return 0 }
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &stmt, nil) == SQLITE_OK else { return 0 }
-        defer { sqlite3_finalize(stmt) }
-        guard sqlite3_step(stmt) == SQLITE_ROW else { return 0 }
-        return sqlite3_column_int(stmt, 0)
+        guard let stmt = SQLiteStatement(database: db, sql: "PRAGMA user_version;") else { return 0 }
+        guard stmt.step() == SQLITE_ROW else { return 0 }
+        return stmt.int(at: 0)
     }
 
     private func tableExists(_ name: String) -> Bool {
         guard let db else { return false }
         let sql = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
-        defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT)
-        return sqlite3_step(stmt) == SQLITE_ROW
+        guard let stmt = SQLiteStatement(database: db, sql: sql) else { return false }
+        stmt.bind(name, at: 1)
+        return stmt.step() == SQLITE_ROW
     }
 
     private func columnNames() -> Set<String> {
         guard let db else { return [] }
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "PRAGMA table_info(entries);", -1, &stmt, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_finalize(stmt) }
+        guard let stmt = SQLiteStatement(database: db, sql: "PRAGMA table_info(entries);") else { return [] }
         var names = Set<String>()
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            if let c = sqlite3_column_text(stmt, 1) {
-                names.insert(String(cString: c))
+        while stmt.step() == SQLITE_ROW {
+            if let name = stmt.text(at: 1) {
+                names.insert(name)
             }
         }
         return names
@@ -189,41 +183,21 @@ final class ClipboardStore {
             INSERT INTO entries (id, type, preview, payload, content_hash, created_at, pinned, rich_payload, rich_format, source_bundle_id, ocr_text)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-            defer { sqlite3_finalize(stmt) }
+            guard let stmt = SQLiteStatement(database: db, sql: sql) else { return }
 
             let id = entry.id.uuidString
-            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 2, entry.type.rawValue, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 3, entry.preview, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 4, entry.payload, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 5, item.contentHash, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_double(stmt, 6, entry.createdAt.timeIntervalSince1970)
-            sqlite3_bind_int(stmt, 7, pinned ? 1 : 0)
-            if let rich = entry.richPayload {
-                _ = rich.withUnsafeBytes { bytes in
-                    sqlite3_bind_blob(stmt, 8, bytes.baseAddress, Int32(bytes.count), SQLITE_TRANSIENT)
-                }
-            } else {
-                sqlite3_bind_null(stmt, 8)
-            }
-            if let format = entry.richFormat {
-                sqlite3_bind_text(stmt, 9, format.rawValue, -1, SQLITE_TRANSIENT)
-            } else {
-                sqlite3_bind_null(stmt, 9)
-            }
-            if let source = entry.sourceBundleId {
-                sqlite3_bind_text(stmt, 10, source, -1, SQLITE_TRANSIENT)
-            } else {
-                sqlite3_bind_null(stmt, 10)
-            }
-            if let ocr = entry.ocrText {
-                sqlite3_bind_text(stmt, 11, ocr, -1, SQLITE_TRANSIENT)
-            } else {
-                sqlite3_bind_null(stmt, 11)
-            }
-            if sqlite3_step(stmt) != SQLITE_DONE {
+            stmt.bind(id, at: 1)
+            stmt.bind(entry.type.rawValue, at: 2)
+            stmt.bind(entry.preview, at: 3)
+            stmt.bind(entry.payload, at: 4)
+            stmt.bind(item.contentHash, at: 5)
+            stmt.bind(entry.createdAt.timeIntervalSince1970, at: 6)
+            stmt.bind(pinned, at: 7)
+            stmt.bind(entry.richPayload, at: 8)
+            stmt.bind(entry.richFormat?.rawValue, at: 9)
+            stmt.bind(entry.sourceBundleId, at: 10)
+            stmt.bind(entry.ocrText, at: 11)
+            if stmt.step() != SQLITE_DONE {
                 NSLog("ClipXS: insert failed: \(String(cString: sqlite3_errmsg(db)))")
             }
 
@@ -244,14 +218,12 @@ final class ClipboardStore {
             SET payload = ?, preview = ?, content_hash = ?, rich_payload = NULL, rich_format = NULL
             WHERE id = ? AND type = 'text';
             """
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-            defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_text(stmt, 1, newText, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 2, PasteboardCapture.textPreview(from: newText), -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 3, ContentHash.sha256(newText), -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 4, id.uuidString, -1, SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) != SQLITE_DONE {
+            guard let stmt = SQLiteStatement(database: db, sql: sql) else { return }
+            stmt.bind(newText, at: 1)
+            stmt.bind(PasteboardCapture.textPreview(from: newText), at: 2)
+            stmt.bind(ContentHash.sha256(newText), at: 3)
+            stmt.bind(id.uuidString, at: 4)
+            if stmt.step() != SQLITE_DONE {
                 NSLog("ClipXS: update text failed: \(String(cString: sqlite3_errmsg(db)))")
             }
             self.notifyChanged()
@@ -262,12 +234,10 @@ final class ClipboardStore {
         queue.async { [weak self] in
             guard let self, let db = self.db else { return }
             let sql = "UPDATE entries SET ocr_text = ? WHERE id = ?;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-            defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_text(stmt, 1, text, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) != SQLITE_DONE {
+            guard let stmt = SQLiteStatement(database: db, sql: sql) else { return }
+            stmt.bind(text, at: 1)
+            stmt.bind(id.uuidString, at: 2)
+            if stmt.step() != SQLITE_DONE {
                 NSLog("ClipXS: update ocr failed: \(String(cString: sqlite3_errmsg(db)))")
             }
             if sqlite3_changes(db) > 0 {
@@ -280,12 +250,10 @@ final class ClipboardStore {
         queue.async { [weak self] in
             guard let self, let db = self.db else { return }
             let sql = "UPDATE entries SET pinned = ? WHERE id = ?;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-            defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_int(stmt, 1, pinned ? 1 : 0)
-            sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) != SQLITE_DONE {
+            guard let stmt = SQLiteStatement(database: db, sql: sql) else { return }
+            stmt.bind(pinned, at: 1)
+            stmt.bind(id.uuidString, at: 2)
+            if stmt.step() != SQLITE_DONE {
                 NSLog("ClipXS: set pinned failed: \(String(cString: sqlite3_errmsg(db)))")
             }
             self.notifyChanged()
@@ -300,11 +268,9 @@ final class ClipboardStore {
                 try? FileManager.default.removeItem(at: url)
             }
             let sql = "DELETE FROM entries WHERE id = ?;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-            defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_text(stmt, 1, entry.id.uuidString, -1, SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) != SQLITE_DONE {
+            guard let stmt = SQLiteStatement(database: db, sql: sql) else { return }
+            stmt.bind(entry.id.uuidString, at: 1)
+            if stmt.step() != SQLITE_DONE {
                 NSLog("ClipXS: delete entry failed: \(String(cString: sqlite3_errmsg(db)))")
             }
             self.notifyChanged()
@@ -343,15 +309,13 @@ final class ClipboardStore {
             // No LIMIT: trimToMax already bounds unpinned rows, and pinned rows
             // must never be hidden just because they exceed the cap.
             let sql = "SELECT \(Self.selectColumns) FROM entries ORDER BY pinned DESC, created_at DESC;"
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            guard let stmt = SQLiteStatement(database: db, sql: sql) else {
                 DispatchQueue.main.async { completion([]) }
                 return
             }
-            defer { sqlite3_finalize(stmt) }
 
             var entries: [ClipboardEntry] = []
-            while sqlite3_step(stmt) == SQLITE_ROW {
+            while stmt.step() == SQLITE_ROW {
                 if let entry = self.rowToEntry(stmt) {
                     entries.append(entry)
                 }
@@ -363,11 +327,9 @@ final class ClipboardStore {
     private func fetchEntry(hash: String) -> ClipboardEntry? {
         guard let db else { return nil }
         let sql = "SELECT \(Self.selectColumns) FROM entries WHERE content_hash = ? LIMIT 1;"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-        defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, hash, -1, SQLITE_TRANSIENT)
-        guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+        guard let stmt = SQLiteStatement(database: db, sql: sql) else { return nil }
+        stmt.bind(hash, at: 1)
+        guard stmt.step() == SQLITE_ROW else { return nil }
         return rowToEntry(stmt)
     }
 
@@ -378,11 +340,9 @@ final class ClipboardStore {
         }
         guard let db else { return }
         let sql = "DELETE FROM entries WHERE content_hash = ?;"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-        defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, hash, -1, SQLITE_TRANSIENT)
-        if sqlite3_step(stmt) != SQLITE_DONE {
+        guard let stmt = SQLiteStatement(database: db, sql: sql) else { return }
+        stmt.bind(hash, at: 1)
+        if stmt.step() != SQLITE_DONE {
             NSLog("ClipXS: delete by hash failed: \(String(cString: sqlite3_errmsg(db)))")
         }
     }
@@ -398,11 +358,9 @@ final class ClipboardStore {
         let cutoff = Date().timeIntervalSince1970 - Double(retention)
         guard let db else { return }
         let sql = "DELETE FROM entries WHERE pinned = 0 AND created_at < ?;"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-        defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_double(stmt, 1, cutoff)
-        if sqlite3_step(stmt) != SQLITE_DONE {
+        guard let stmt = SQLiteStatement(database: db, sql: sql) else { return }
+        stmt.bind(cutoff, at: 1)
+        if stmt.step() != SQLITE_DONE {
             NSLog("ClipXS: purge expired failed: \(String(cString: sqlite3_errmsg(db)))")
         }
         if sqlite3_changes(db) > 0 {
@@ -427,13 +385,11 @@ final class ClipboardStore {
         let orphanSQL = """
         SELECT payload FROM entries WHERE type = 'image';
         """
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, orphanSQL, -1, &stmt, nil) == SQLITE_OK else { return }
-        defer { sqlite3_finalize(stmt) }
+        guard let stmt = SQLiteStatement(database: db, sql: orphanSQL) else { return }
         var kept = Set<String>()
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            if let c = sqlite3_column_text(stmt, 0) {
-                kept.insert(String(cString: c))
+        while stmt.step() == SQLITE_ROW {
+            if let path = stmt.text(at: 0) {
+                kept.insert(path)
             }
         }
 
@@ -450,50 +406,94 @@ final class ClipboardStore {
         }
     }
 
-    private func rowToEntry(_ stmt: OpaquePointer?) -> ClipboardEntry? {
-        guard let stmt,
-              let idC = sqlite3_column_text(stmt, 0),
-              let typeC = sqlite3_column_text(stmt, 1),
-              let previewC = sqlite3_column_text(stmt, 2),
-              let payloadC = sqlite3_column_text(stmt, 3),
-              let type = ClipboardItemType(rawValue: String(cString: typeC)),
-              let id = UUID(uuidString: String(cString: idC))
+    private func rowToEntry(_ stmt: SQLiteStatement) -> ClipboardEntry? {
+        guard let idText = stmt.text(at: 0),
+              let typeText = stmt.text(at: 1),
+              let preview = stmt.text(at: 2),
+              let payload = stmt.text(at: 3),
+              let type = ClipboardItemType(rawValue: typeText),
+              let id = UUID(uuidString: idText)
         else { return nil }
-
-        let preview = String(cString: previewC)
-        let payload = String(cString: payloadC)
-        let createdAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4))
-        let pinned = sqlite3_column_int(stmt, 5) != 0
-
-        var richPayload: Data?
-        if let blob = sqlite3_column_blob(stmt, 6) {
-            let count = Int(sqlite3_column_bytes(stmt, 6))
-            richPayload = Data(bytes: blob, count: count)
-        }
-        var richFormat: RichTextFormat?
-        if let formatC = sqlite3_column_text(stmt, 7) {
-            richFormat = RichTextFormat(rawValue: String(cString: formatC))
-        }
-        var sourceBundleId: String?
-        if let sourceC = sqlite3_column_text(stmt, 8) {
-            sourceBundleId = String(cString: sourceC)
-        }
-        var ocrText: String?
-        if let ocrC = sqlite3_column_text(stmt, 9) {
-            ocrText = String(cString: ocrC)
-        }
 
         return ClipboardEntry(
             id: id,
             type: type,
             preview: preview,
             payload: payload,
-            createdAt: createdAt,
-            isPinned: pinned,
-            richPayload: richPayload,
-            richFormat: richFormat,
-            sourceBundleId: sourceBundleId,
-            ocrText: ocrText
+            createdAt: Date(timeIntervalSince1970: stmt.double(at: 4)),
+            isPinned: stmt.int(at: 5) != 0,
+            richPayload: stmt.data(at: 6),
+            richFormat: stmt.text(at: 7).flatMap(RichTextFormat.init(rawValue:)),
+            sourceBundleId: stmt.text(at: 8),
+            ocrText: stmt.text(at: 9)
         )
+    }
+}
+
+/// Owns one prepared statement. Use only on the database's serial queue (or
+/// during initialization), and keep bindings alive through SQLite's copy mode.
+private final class SQLiteStatement {
+    private let handle: OpaquePointer
+
+    init?(database: OpaquePointer, sql: String) {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement else {
+            sqlite3_finalize(statement)
+            return nil
+        }
+        handle = statement
+    }
+
+    deinit {
+        sqlite3_finalize(handle)
+    }
+
+    func bind(_ value: String?, at index: Int32) {
+        if let value {
+            sqlite3_bind_text(handle, index, value, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(handle, index)
+        }
+    }
+
+    func bind(_ value: Data?, at index: Int32) {
+        if let value {
+            _ = value.withUnsafeBytes { bytes in
+                sqlite3_bind_blob(handle, index, bytes.baseAddress, Int32(bytes.count), SQLITE_TRANSIENT)
+            }
+        } else {
+            sqlite3_bind_null(handle, index)
+        }
+    }
+
+    func bind(_ value: Double, at index: Int32) {
+        sqlite3_bind_double(handle, index, value)
+    }
+
+    func bind(_ value: Bool, at index: Int32) {
+        sqlite3_bind_int(handle, index, value ? 1 : 0)
+    }
+
+    func step() -> Int32 {
+        sqlite3_step(handle)
+    }
+
+    func text(at column: Int32) -> String? {
+        guard let value = sqlite3_column_text(handle, column) else { return nil }
+        return String(cString: value)
+    }
+
+    func data(at column: Int32) -> Data? {
+        guard let bytes = sqlite3_column_blob(handle, column) else { return nil }
+        return Data(bytes: bytes, count: Int(sqlite3_column_bytes(handle, column)))
+    }
+
+    func int(at column: Int32) -> Int32 {
+        sqlite3_column_int(handle, column)
+    }
+
+    func double(at column: Int32) -> Double {
+        sqlite3_column_double(handle, column)
     }
 }

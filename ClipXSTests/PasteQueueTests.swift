@@ -55,6 +55,43 @@ final class PasteQueueTests: XCTestCase {
         XCTAssertEqual(queue.entries, [second])
     }
 
+    func testRapidSuccessfulPressesAreProcessedInOrder() async {
+        var pasted: [UUID] = []
+        var completions: [(Bool) -> Void] = []
+        let queue = PasteQueue(monitorsKeyboard: false) { entry, completion in
+            pasted.append(entry.id)
+            completions.append(completion)
+        }
+        let entries = (1...3).map { ClipboardEntry(type: .text, preview: "\($0)", payload: "\($0)") }
+        queue.enqueue(entries)
+        queue.pasteNext()
+        queue.pasteNext()
+        queue.pasteNext()
+        XCTAssertEqual(pasted, [entries[0].id])
+        for index in 0..<3 {
+            XCTAssertEqual(completions.count, index + 1)
+            completions[index](true)
+            await Task.yield()
+        }
+        XCTAssertEqual(pasted, entries.map(\.id))
+        XCTAssertTrue(queue.entries.isEmpty)
+    }
+
+    func testClearDiscardsPendingPressesEvenWhenSameEntryIsRequeued() async {
+        var completions: [(Bool) -> Void] = []
+        let queue = PasteQueue(monitorsKeyboard: false) { _, completion in completions.append(completion) }
+        let entry = ClipboardEntry(type: .text, preview: "one", payload: "one")
+        queue.enqueue([entry, entry])
+        queue.pasteNext()
+        queue.pasteNext()
+        queue.clear()
+        queue.enqueue([entry])
+        completions[0](true)
+        await Task.yield()
+        XCTAssertEqual(queue.entries, [entry])
+        XCTAssertEqual(completions.count, 1)
+    }
+
     func testRecognizesOnlyPlainCommandVAndControlVAndIgnoresGeneratedPaste() {
         let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)!
         for flags: CGEventFlags in [.maskCommand, .maskControl, [.maskCommand, .maskAlphaShift]] {

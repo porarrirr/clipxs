@@ -13,6 +13,8 @@ final class PasteQueue: ObservableObject {
     /// Serializes hotkey presses: a second press while a paste is in flight
     /// would race the frontmost-app activation dance in PasteService.
     private var isPasting = false
+    private var pendingPasteRequests = 0
+    private var generation = UUID()
 
     private var eventTap: CFMachPort?
     private var eventSource: CFRunLoopSource?
@@ -96,21 +98,36 @@ final class PasteQueue: ObservableObject {
 
     func clear() {
         entries = []
+        pendingPasteRequests = 0
+        generation = UUID()
         stopMonitoring()
     }
 
     func pasteNext() {
-        guard !isPasting, let next = entries.first else { return }
+        guard let next = entries.first else { return }
+        if isPasting {
+            pendingPasteRequests += 1
+            return
+        }
         isPasting = true
+        let pasteGeneration = generation
         paste(next) { [weak self] success in
             Task { @MainActor in
                 guard let self else { return }
                 self.isPasting = false
                 // Keep the entry on failure so nothing is silently dropped.
-                if success, self.entries.first?.id == next.id {
+                if success, self.generation == pasteGeneration, self.entries.first?.id == next.id {
                     self.entries.removeFirst()
                     if self.entries.isEmpty { self.stopMonitoring() }
                 }
+                if !success, self.generation == pasteGeneration {
+                    self.pendingPasteRequests = 0
+                }
+                if self.pendingPasteRequests > 0 {
+                    self.pendingPasteRequests -= 1
+                    self.pasteNext()
+                }
+                if self.entries.isEmpty { self.pendingPasteRequests = 0 }
             }
         }
     }
