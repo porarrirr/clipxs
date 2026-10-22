@@ -1,0 +1,35 @@
+{
+  "before": {
+    "entries": 1000,
+    "rounds": 7,
+    "navigation_ms": 3096.475583,
+    "typing_ms": 341.167208,
+    "image_filter_navigation_ms": 2379.630542,
+    "checksum": 560688
+  },
+  "after": {
+    "entries": 1000,
+    "rounds": 7,
+    "navigation_ms": 0.2225,
+    "typing_ms": 67.376458,
+    "image_filter_navigation_ms": 0.111292,
+    "checksum": 560688
+  },
+  "comparison": {
+    "navigation_ms": {
+      "before": 3096.475583,
+      "after": 0.2225,
+      "reduction_percent": 99.99281441128677
+    },
+    "typing_ms": {
+      "before": 341.167208,
+      "after": 67.376458,
+      "reduction_percent": 80.25119166786979
+    },
+    "image_filter_navigation_ms": {
+      "before": 2379.630542,
+      "after": 0.111292,
+      "reduction_percent": 99.99532313953634
+    }
+  }
+}

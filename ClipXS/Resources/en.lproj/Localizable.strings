@@ -1,21 +1,101 @@
 "history_title" = "Clipboard History";
-"history_shortcut" = "Option + Command + V";
 "history_empty" = "No clipboard history yet";
+"history_no_results" = "No results";
 "history_hint_navigate" = "Navigate";
 "history_hint_paste" = "Paste";
 "history_hint_close" = "Close";
+"hint_paste_plain" = "⇧↩ Plain";
+"hint_quick_paste" = "⌘1–9 Quick Paste";
+"hint_delete" = "⌘⌫ Delete";
 
-"menu_open_history" = "Open History (Option+Command+V)";
+"search_placeholder" = "Search history…";
+"filter_all" = "All";
+"filter_text" = "Text";
+"filter_link" = "Links";
+"filter_image" = "Images";
+"filter_file" = "Files";
+
+"context_paste_paths" = "Paste File Paths";
+"context_paste" = "Paste";
+"context_paste_plain" = "Paste as Plain Text";
+"context_copy" = "Copy";
+"context_pin" = "Pin";
+"context_unpin" = "Unpin";
+"context_delete" = "Delete";
+"context_transform" = "Paste with Transform";
+"context_add_to_queue" = "Add to Paste Queue";
+"context_merge_paste" = "Paste %d Items Merged";
+"context_enqueue_selection" = "Add %d Items to Paste Queue";
+"context_edit" = "Edit…";
+"context_paste_ocr" = "Paste Recognized Text";
+"context_copy_ocr" = "Copy Recognized Text";
+
+"transform_uppercase" = "UPPERCASE";
+"transform_lowercase" = "lowercase";
+"transform_remove_linebreaks" = "Remove Line Breaks";
+"transform_collapse_whitespace" = "Collapse Whitespace";
+"transform_url_decode" = "URL Decode";
+
+"queue_bar_count" = "Paste queue: %d";
+"queue_bar_hint" = "Press ⌘V / Ctrl+V or %@ to paste the next item";
+"queue_clear" = "Clear";
+
+"multi_select_count" = "%d selected";
+"multi_merge_paste" = "Paste Merged";
+"multi_clear" = "Deselect";
+"hint_multi_select" = "⌘Click Multi-select";
+
+"edit_save" = "Save";
+"edit_hint" = "⌘↩ Save / Esc Cancel";
+
+"preview_placeholder" = "Select an item to preview";
+"preview_pinned" = "Pinned";
+"preview_char_count" = "%d characters";
+"preview_rich_text" = "Rich text";
+"preview_ocr_label" = "Recognized text";
+"quick_look_loading" = "Loading preview";
+"quick_look_failed" = "Preview unavailable";
+
+"menu_open_history" = "Open History (%@)";
+"menu_settings" = "Settings…";
 "menu_clear_history" = "Clear History";
 "menu_accessibility" = "Open Accessibility Settings…";
 "menu_launch_at_login" = "Launch at Login";
 "menu_quit" = "Quit ClipXS";
+
+"settings_title" = "ClipXS Settings";
+"settings_section_hotkey" = "Hotkey";
+"settings_hotkey_label" = "Open history panel";
+"settings_hotkey_recording" = "Press new shortcut…";
+"settings_hotkey_recording_hint" = "Press a key with ⌘, ⌥, or ⌃ (Esc to cancel)";
+"settings_hotkey_conflict_title" = "Could Not Register Shortcut";
+"settings_hotkey_conflict_message" = "That shortcut appears to be taken by the system or another app. The previous shortcut has been restored.";
+"settings_section_general" = "General";
+"settings_max_entries_label" = "Maximum history items";
+"settings_retention_label" = "Auto-delete history";
+"retention_unlimited" = "Never";
+"retention_day" = "After 24 hours";
+"retention_week" = "After 1 week";
+"retention_month" = "After 1 month";
+"settings_ocr_label" = "Recognize text in images (OCR)";
+"settings_section_excluded_apps" = "Excluded Apps";
+"settings_excluded_apps_description" = "Copies made in these apps are never recorded.";
+"settings_excluded_apps_empty" = "No excluded apps";
+"settings_section_plain_paste" = "Plain Text Paste Apps";
+"settings_plain_paste_description" = "Pastes into these apps are always sent as plain text.";
+"settings_plain_paste_empty" = "No apps configured";
+"settings_excluded_apps_bundle_id_placeholder" = "Bundle ID (e.g. com.example.app)";
+"settings_excluded_apps_add" = "Add";
+"settings_section_data" = "Data";
+"settings_clear_confirm_title" = "Clear All History?";
+"settings_clear_confirm_message" = "All clipboard history, including pinned items, will be deleted. This cannot be undone.";
 
 "launch_at_login_failed_title" = "Could Not Enable Launch at Login";
 "launch_at_login_failed_message" = "ClipXS could not register as a login item. Open Login Items settings and allow ClipXS, or move the app to Applications and try again.";
 "open_login_items_settings" = "Open Login Items Settings";
 
 "type_text" = "Text";
+"type_link" = "Link";
 "type_image" = "Image";
 "type_files" = "Files";
 
@@ -27,15 +107,13 @@
 "paste_failed_message" = "Paste could not be sent. Confirm the app below is enabled in Accessibility, then restart ClipXS:\n\n%@";
 "open_settings" = "Open Settings";
 "restart_app" = "Restart ClipXS";
-"install_to_applications" = "Copy to Applications Folder";
-"install_failed_title" = "Could Not Install to Applications";
-"open_automation_settings" = "Open Automation Settings";
 "no_target_title" = "No Destination App";
 "no_target_message" = "Click in the app where you want to paste, then open clipboard history again.";
 "manual_paste_title" = "ClipXS";
 "manual_paste_body" = "Copied to clipboard. Press Command+V to paste.";
 "cancel" = "Cancel";
 "later" = "Later";
+"ok" = "OK";
 
 "welcome_title" = "Welcome to ClipXS";
 "welcome_message" = "Press Option+Command+V to open clipboard history. Grant Accessibility permission so ClipXS can paste your selection automatically.";

@@ -4,11 +4,8 @@ import Foundation
 final class ClipboardMonitor {
     static let shared = ClipboardMonitor()
 
-    var onEntriesChanged: (() -> Void)?
-
     private var timer: Timer?
     private var lastChangeCount = NSPasteboard.general.changeCount
-    private var ignoreNextChange = false
 
     private init() {}
 
@@ -26,9 +23,12 @@ final class ClipboardMonitor {
         timer = nil
     }
 
-    func suppressNextCapture() {
-        ignoreNextChange = true
-        lastChangeCount = NSPasteboard.general.changeCount
+    /// Account for our synchronous clipboard write, including a failed write
+    /// rolled back by PasteboardRestore. Never suppress the user's next copy.
+    @discardableResult
+    func performWithoutCapture(_ write: () -> Bool) -> Bool {
+        defer { lastChangeCount = NSPasteboard.general.changeCount }
+        return write()
     }
 
     private func poll() {
@@ -37,13 +37,24 @@ final class ClipboardMonitor {
         guard count != lastChangeCount else { return }
         lastChangeCount = count
 
-        if ignoreNextChange {
-            ignoreNextChange = false
+        // Frontmost app at poll time is the best available guess at the copy's
+        // source (the 0.5s polling window makes this a heuristic).
+        let sourceBundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        if let sourceBundleId, SettingsAccess.excludedBundleIds.contains(sourceBundleId) {
             return
         }
 
-        guard let captured = PasteboardCapture.capture(from: pasteboard) else { return }
-        ClipboardStore.shared.insert(captured.entry, contentHash: captured.contentHash)
-        onEntriesChanged?()
+        guard let captured = PasteboardCapture.capture(from: pasteboard, sourceBundleId: sourceBundleId) else { return }
+        ClipboardStore.shared.insert(captured)
+
+        if captured.entry.type == .image,
+           let imageData = captured.imageData,
+           SettingsAccess.ocrEnabled {
+            let entryId = captured.entry.id
+            OCRService.recognizeText(in: imageData) { text in
+                guard let text, !text.isEmpty else { return }
+                ClipboardStore.shared.updateOCRText(id: entryId, text: text)
+            }
+        }
     }
 }
